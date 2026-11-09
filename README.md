@@ -103,27 +103,36 @@ CSV rather than extrapolated. With the current training data, 72h is
 unsupported (maximum follow-up 66.99h), so the complete weighted Brier and
 competition score cannot yet be calculated from this KM baseline.
 
-## Repeated cross-validation
+## Survival models and repeated cross-validation
 
-Run the penalized Cox model through repeated, event-stratified 5-fold
-cross-validation:
+Run all three scikit-survival models, compare repeated stratified 5-fold OOF
+scores, fit each model on all labeled training data, and predict the supplied
+unlabeled test fires:
 
 ```powershell
-python scripts\cross_validate_cox.py C:\path\to\train.csv
+python scripts\train_survival_models.py C:\path\to\train.csv C:\path\to\test.csv
 ```
 
-By default, five distinct seeds each create a fresh shuffled 5-fold split.
-Numeric features only are used; `event_id` and the survival targets are
-excluded. Median imputation and standard scaling are fitted within each
-training fold as part of the estimator pipeline. The Cox L2 penalty is fixed
-at 0.1 (not tuned on validation folds). Scores are computed on each complete
-repeat's out-of-fold predictions, then summarized across seeds. The script
-writes per-seed metrics, averaged OOF probabilities, and per-fold event counts
-under `artifacts\`.
+By default, five distinct seeds each create a fresh event-stratified
+5-fold split. Numeric features only are used; `event_id` and the survival
+targets are excluded. Median imputation is fitted inside every training fold.
+Cox features are also standardized within each fold. The configured models
+are:
 
-Horizon probabilities are read from each fitted Cox survival function. Beyond
-its final training event time, the step-function estimate is carried forward;
-this is an explicit flat-tail estimate, not evidence that risk stops after
-that time. The 72h Brier component has only the labels known under the
-competition censoring rule. For this dataset there are no known-safe labels at
-72h, so that component is not a robust estimate of full 72-hour calibration.
+- Penalized Cox proportional hazards (`alpha=0.1`)
+- Random survival forest (`100` trees, minimum leaf size `3`)
+- Gradient-boosted survival trees (`100` trees, depth `1`, learning rate `0.05`)
+
+These are fixed initial configurations, not hyperparameter-tuned results.
+Every validation fire's survival function is converted to hit probabilities
+with `1 - S(t)` at 12, 24, 48, and 72 hours. Repeated OOF probabilities are
+averaged per fire; each seed's competition score is computed before averaging.
+The CLI saves per-seed metrics, averaged OOF probabilities, fold counts,
+full-training fitted models, and test-fire probabilities under `artifacts\`.
+
+The survival-function step estimate is carried forward beyond the last event
+time available to a fitted model; this is an explicit flat-tail estimate, not
+evidence that risk stops after that time. The 72h Brier component has only the
+labels known under the competition censoring rule. For this dataset there are
+no known-safe labels at 72h, so that component is not a robust estimate of
+full 72-hour calibration.

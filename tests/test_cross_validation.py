@@ -37,6 +37,10 @@ class RepeatedStratifiedCoxCVTests(unittest.TestCase):
             {17: 15, 29: 15},
         )
         self.assertEqual(len(result.mean_oof_predictions), row_count)
+        self.assertEqual(
+            list(result.mean_oof_predictions.columns),
+            ["prob_12h", "prob_24h", "prob_48h", "prob_72h"],
+        )
         self.assertFalse(result.mean_oof_predictions.isna().any().any())
         self.assertTrue(
             result.mean_oof_predictions.apply(
