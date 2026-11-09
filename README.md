@@ -102,3 +102,28 @@ follow-up is reported as unsupported and written as blank in the predictions
 CSV rather than extrapolated. With the current training data, 72h is
 unsupported (maximum follow-up 66.99h), so the complete weighted Brier and
 competition score cannot yet be calculated from this KM baseline.
+
+## Repeated cross-validation
+
+Run the penalized Cox model through repeated, event-stratified 5-fold
+cross-validation:
+
+```powershell
+python scripts\cross_validate_cox.py C:\path\to\train.csv
+```
+
+By default, five distinct seeds each create a fresh shuffled 5-fold split.
+Numeric features only are used; `event_id` and the survival targets are
+excluded. Median imputation and standard scaling are fitted within each
+training fold as part of the estimator pipeline. The Cox L2 penalty is fixed
+at 0.1 (not tuned on validation folds). Scores are computed on each complete
+repeat's out-of-fold predictions, then summarized across seeds. The script
+writes per-seed metrics, averaged OOF probabilities, and per-fold event counts
+under `artifacts\`.
+
+Horizon probabilities are read from each fitted Cox survival function. Beyond
+its final training event time, the step-function estimate is carried forward;
+this is an explicit flat-tail estimate, not evidence that risk stops after
+that time. The 72h Brier component has only the labels known under the
+competition censoring rule. For this dataset there are no known-safe labels at
+72h, so that component is not a robust estimate of full 72-hour calibration.
