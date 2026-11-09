@@ -129,6 +129,35 @@ with `1 - S(t)` at 12, 24, 48, and 72 hours. Repeated OOF probabilities are
 averaged per fire; each seed's competition score is computed before averaging.
 The CLI saves per-seed metrics, averaged OOF probabilities, fold counts,
 full-training fitted models, and test-fire probabilities under `artifacts\`.
+It also reports diagnostic Brier scores at all four horizons, including 12h
+(which is not part of the weighted competition Brier), together with known
+label counts.
+
+On the current 221-fire training set, known labels are:
+
+| Horizon | Hit (1) | Safe (0) | Unknown |
+|---|---:|---:|---:|
+| 12h | 49 | 166 | 6 |
+| 24h | 63 | 133 | 25 |
+| 48h | 66 | 100 | 55 |
+| 72h | 69 | 0 | 152 |
+
+Across the five CV repeats, mean Brier by horizon was:
+
+| Model | 12h | 24h | 48h | 72h |
+|---|---:|---:|---:|---:|
+| Cox | 0.1044 | 0.0986 | 0.0981 | 0.0822 |
+| Random survival forest | 0.0737 | 0.0612 | 0.0528 | 0.0500 |
+| Gradient-boosted survival | 0.0623 | 0.0357 | 0.0265 | 0.0028 |
+
+The 72h Brier values are conditional on the only 69 fires with known labels,
+all of which are hits. For example, the gradient-boosted model's mean OOF
+72h probability for these rows is 0.956. A low Brier score here mainly says
+that predictions are calibrated close to 1 for observed hits; with zero
+known-safe rows, it cannot assess whether the model assigns appropriately low
+72h probabilities to fires that remain safe. Thus 72h has little usable class
+contrast in this dataset and its Brier score should not be read as evidence of
+general 72-hour discrimination or calibration.
 
 The survival-function step estimate is carried forward beyond the last event
 time available to a fitted model; this is an explicit flat-tail estimate, not
@@ -136,3 +165,15 @@ evidence that risk stops after that time. The 72h Brier component has only the
 labels known under the competition censoring rule. For this dataset there are
 no known-safe labels at 72h, so that component is not a robust estimate of
 full 72-hour calibration.
+
+Generate a markdown results write-up and close/far test-fire survival-curve
+plot from the fitted models and CV metrics:
+
+```powershell
+python scripts\write_results_report.py C:\path\to\train.csv C:\path\to\test.csv
+```
+
+Outputs are `artifacts\model_results_report.md` and
+`artifacts\predicted_fire_curves.png`. The report distinguishes the in-sample
+Kaplan-Meier diagnostics from model out-of-fold scores and notes when
+submission status cannot be verified.

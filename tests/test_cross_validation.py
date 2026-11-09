@@ -32,6 +32,8 @@ class RepeatedStratifiedCoxCVTests(unittest.TestCase):
 
         self.assertEqual(len(result.per_seed_metrics), 2)
         self.assertEqual(len(result.fold_event_counts), 10)
+        self.assertIn("brier_12h", result.per_seed_metrics)
+        self.assertIn("known_12h", result.per_seed_metrics)
         self.assertEqual(
             result.fold_event_counts.groupby("seed")["valid_events"].sum().to_dict(),
             {17: 15, 29: 15},

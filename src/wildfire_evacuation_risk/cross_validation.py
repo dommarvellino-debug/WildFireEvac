@@ -22,6 +22,7 @@ from wildfire_evacuation_risk.metrics import (
     CompetitionMetricResult,
     competition_metric,
 )
+from wildfire_evacuation_risk.labels import add_horizon_labels
 
 HORIZONS = (12, 24, 48, 72)
 MODEL_NAMES = ("cox", "random_survival_forest", "gradient_boosting_survival")
@@ -96,6 +97,28 @@ def _metric_row(seed: int, result: CompetitionMetricResult) -> dict[str, float |
         row[f"brier_{horizon}h"] = value
         row[f"known_{horizon}h"] = result.known_rows_by_horizon[horizon]
     return row
+
+
+def _horizon_diagnostics(
+    outcomes: pd.DataFrame,
+    predictions: pd.DataFrame,
+) -> dict[str, float | int]:
+    labels = add_horizon_labels(outcomes, horizons=HORIZONS)
+    diagnostics: dict[str, float | int] = {}
+    for horizon in HORIZONS:
+        target = labels[f"threat_by_{horizon}h"]
+        known = target.notna()
+        diagnostics[f"brier_{horizon}h"] = float(
+            np.mean(
+                (
+                    predictions.loc[known, f"prob_{horizon}h"].to_numpy(dtype=float)
+                    - target.loc[known].to_numpy(dtype=float)
+                )
+                ** 2
+            )
+        )
+        diagnostics[f"known_{horizon}h"] = int(known.sum())
+    return diagnostics
 
 
 def repeated_stratified_survival_cv(
@@ -202,7 +225,9 @@ def repeated_stratified_survival_cv(
         if oof.isna().any().any():
             raise RuntimeError(f"Seed {seed} did not produce complete OOF predictions.")
         metric_result = competition_metric(outcome_data, oof)
-        metric_rows.append(_metric_row(int(seed), metric_result))
+        metric_row = _metric_row(int(seed), metric_result)
+        metric_row.update(_horizon_diagnostics(outcome_data, oof))
+        metric_rows.append(metric_row)
         horizon_predictions.append(oof)
 
     stacked = pd.concat(horizon_predictions, keys=seeds, names=["seed", "row"])

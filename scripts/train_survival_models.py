@@ -82,6 +82,14 @@ def main() -> None:
         for column in ("score", "c_index", "weighted_brier"):
             values = cv_result.per_seed_metrics[column]
             print(f"{column}: {values.mean():.4f} ± {values.std(ddof=1):.4f}")
+        print("Per-horizon Brier diagnostics (mean ± SD; known labels):")
+        for horizon in (12, 24, 48, 72):
+            values = cv_result.per_seed_metrics[f"brier_{horizon}h"]
+            known = int(cv_result.per_seed_metrics[f"known_{horizon}h"].iloc[0])
+            print(
+                f"  {horizon}h: {values.mean():.4f} ± {values.std(ddof=1):.4f} "
+                f"(n={known})"
+            )
 
         fitted_model = fit_survival_model(
             train,
