@@ -16,9 +16,11 @@ event is observed (right censoring). The event definition, censoring rules, and
 whether horizons are measured from ignition or the end of the five-hour window
 must be established before training.
 
-## Set up on Windows
+## Set up
 
-Use Python 3.10 or newer:
+Use Python 3.10 or newer.
+
+Windows (PowerShell):
 
 ```powershell
 py -3.10 -m venv .venv
@@ -27,21 +29,39 @@ python -m pip install --upgrade pip
 python -m pip install -e .
 ```
 
+macOS/Linux:
+
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -e .
+```
+
+The default install contains only what the web app needs. The offline
+survival-analysis scripts additionally need the model stack:
+
+```powershell
+python -m pip install -e ".[models]"
+```
+
 If scikit-survival has no compatible wheel for the local Windows/Python
 combination, use a supported Linux environment such as WSL and install from
 this same project manifest there.
 
-## Live global hotspot map (prototype)
+## Run the web app
 
-The Streamlit app displays NASA FIRMS satellite hotspot detections globally,
-for Indonesia, or for Kalimantan. These are satellite detections—not verified
-fire perimeters, evacuation boundaries, or model forecasts.
+The Streamlit app is report-first: it opens on **Reports** (GDACS global
+wildfire events) and each report can surface related English headlines from
+GDELT, with Google News as a fallback when GDELT is unavailable or rate
+limited. The **Live Map** tab shows NASA FIRMS satellite hotspot detections
+globally, for Indonesia, or for Kalimantan. These are satellite detections—not
+verified fire perimeters, evacuation boundaries, or model forecasts.
 
-Install the updated project dependencies:
-
-```powershell
-python -m pip install -e .
-```
+Reports and related news need no credentials. The Live Map needs a free NASA
+FIRMS map key (register on the [FIRMS API map key
+page](https://firms.modaps.eosdis.nasa.gov/api/map_key/)). Without a key the
+app still runs; the Live Map tab explains how to set one.
 
 Set `FIRMS_MAP_KEY` for the current PowerShell session without echoing the
 value, then launch the app:
@@ -57,6 +77,31 @@ finally {
 }
 python -m streamlit run app.py
 ```
+
+On macOS/Linux, set the variable with `export FIRMS_MAP_KEY=...` in your
+shell, then run the same `streamlit run` command.
+
+The report window uses each event's last GDACS report date, and the sidebar
+can hide low-impact Green alerts or include ended reports.
+
+## Run tests
+
+The web app and data-client tests run with the core install:
+
+```powershell
+python -m unittest tests.test_firms tests.test_gdacs tests.test_news tests.test_google_news
+```
+
+The full suite also covers the offline survival models, so install the
+optional stack first:
+
+```powershell
+python -m pip install -e ".[models]"
+python -m unittest discover -s tests -p "test_*.py"
+```
+
+The network clients are tested with mocked responses, so the suite runs
+offline.
 
 The key is read only by the Python backend, never put in browser code or
 committed. Do not paste it into source files, screenshots, issue reports, or
