@@ -1,5 +1,9 @@
 # Wildfire evacuation risk forecasting
 
+> **Development status:** This project is still under active development. Features,
+> forecasts, and documentation may change; do not rely on it for emergency
+> decisions.
+
 The project will estimate whether a wildfire threatens an evacuation zone using
 only information available during the fire's first five hours. The target
 forecast horizons are 12, 24, 48, and 72 hours after that observation window.
