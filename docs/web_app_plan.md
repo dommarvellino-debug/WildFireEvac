@@ -1,7 +1,7 @@
 # Wildfire Global Awareness Web App — Architecture & Roadmap
 
-Status: draft plan, no code written yet. Written 2026-11-10 against the
-current repository state; product decisions locked 2026-11-10 (Section 10).
+Status: implementation in progress. Updated 2026-11-10 to reflect the current
+Streamlit app and its globe-first interface; future phases remain a roadmap.
 
 ## 1. Objective
 
@@ -23,14 +23,18 @@ verified perimeters, evacuation boundaries, or incident reports.
 | Capability | Status | Location |
 |---|---|---|
 | FIRMS hotspot fetch (validation, key sanitization, geo-filtering) | Done | `src/wildfire_evacuation_risk/firms.py` |
-| Live pydeck world map with tooltips and records table | Done | `app.py` |
+| Interactive globe with live GDACS/FIRMS point overlays | Done | `app.py`, `src/wildfire_evacuation_risk/globe.py` |
 | Unit tests with mocked `urlopen`, secret-safe errors | Done | `tests/test_firms.py` |
 | Survival models (Cox / RSF / GBS), CV, metrics, labels | Done, offline | `modeling.py`, `cross_validation.py`, `metrics.py`, `labels.py`, `scripts/` |
-| Auto-refresh | Missing | — |
-| News feed | Missing | — |
-| Official reports feed | Missing | — |
-| Forecast panel in the UI | Missing | — |
+| Auto-refresh | Done | `app.py` |
+| Report feed with related news | Done | `app.py` |
+| Official reports feed | Done | `src/wildfire_evacuation_risk/gdacs.py` |
+| Offline forecast panel | Done | `app.py` |
 | Model predictions wired to live data | Missing | — |
+
+The globe uses a static NASA Blue Marble texture; only its GDACS and optional
+FIRMS point overlays are live. The global news feed, live weather context, and
+model predictions connected to current fires remain future work.
 
 Constraints inherited from the current design that the plan must respect:
 
@@ -46,7 +50,7 @@ Constraints inherited from the current design that the plan must respect:
 ┌────────────────────────────────────────────────────────────────────┐
 │ WildFireEvac · Global Wildfire Awareness        ● Live · 12:03 UTC   │
 ├───────────────┬────────────────────────────────────────────────────┤
-│ SIDEBAR       │  Tabs:  [Reports] [Live Map] [Forecast] [News]      │
+│ SIDEBAR       │  Tabs:  [Live Globe] [Reports] [Forecast]           │
 │               │                                                    │
 │ Coverage    ▼ │  ── tab content (see below) ──                     │
 │ Feed        ▼ │                                                    │
@@ -58,13 +62,18 @@ Constraints inherited from the current design that the plan must respect:
 └────────────────────────────────────────────────────────────────────┘
 ```
 
-`Reports` is the default landing tab. Opening a report card reveals its
-related news inline (see "News-to-report matching rules" below).
+`Live Globe` is the default landing tab. It overlays GDACS reports and optional
+NASA FIRMS detections on a rotatable globe with static NASA Blue Marble base
+imagery. `Reports` shows official events and related news inline (see
+"News-to-report matching rules" below); a standalone global News tab remains
+future work.
 
-### Tab: Live Map (extends what exists today)
-- pydeck layers: GDACS reports coloured by alert level (no credentials) plus
-  NASA FIRMS hotspot detections when a map key is configured.
-- Existing metrics row and records expanders, plus a mapped-reports table.
+### Tab: Live Globe (implemented)
+- Interactive 3D globe with GDACS reports coloured by alert level and optional
+  NASA FIRMS hotspot detections.
+- Static NASA Blue Marble texture with clear attribution; this is not live
+  satellite imagery. Globe points are clickable for report/detection details.
+- Existing metrics row and mapped-reports table.
 - New: per-country/region detection counts and a daily-detections trend chart
   over the look-back window; "stale data" badge when the last fetch failed.
 
@@ -252,7 +261,7 @@ from hosting one shared instance; it is planned in Section 11.
 ### Phase 2 — Global news feed + detection analytics (S–M)
 - News tab: standalone global wildfire feed using the same GDELT client,
   keyword filter, English only.
-- Live Map tab: per-region counts and daily detection trend chart (Tier 1).
+- Live Globe tab: per-region counts and daily detection trend chart (Tier 1).
 - Region summary cards on Reports (detections, change, max FRP, report
   count).
 - Acceptance: News tab refreshes on cadence; trend chart reflects the
@@ -357,18 +366,20 @@ Publishing checklist (after Phase 1):
 ### 11.2 Each user needs their own FIRMS key
 The FIRMS map key is personal and rate-limited; it must not be redistributed.
 Registration is free. Fix: make the app degrade gracefully — without a key,
-the Live Map tab still renders the GDACS report layer and shows a short
-"set FIRMS_MAP_KEY" notice for hotspots, while Reports, News, and Forecast
-weather still work, since those sources need no key. This replaces the
+the Live Globe tab still renders the GDACS report layer and shows a short
+"set FIRMS_MAP_KEY" notice for hotspots, while Reports and Forecast still
+work, since those sources need no key. Related news is shown on report cards;
+a standalone News tab remains future work. This replaces the
 current `st.stop()` in `app.py`.
 
 ### 11.3 Installation friction
 `pyproject.toml` installs the full model stack for everyone. On this machine
 `scikit-survival 0.25.0` installed fine, but it remains the hardest
 dependency on other platforms. The app itself (Phases 1–3) needs only
-`pandas`, `streamlit`, `pydeck`. Fix: split dependencies:
+`pandas` and `streamlit`; the globe renderer and imagery are loaded from
+external CDNs. Fix: split dependencies:
 
-- core: `pandas`, `streamlit`, `pydeck`
+- core: `pandas`, `streamlit`
 - optional `models` extra: `scikit-learn`, `scikit-survival`, `matplotlib`
 
 `pip install -e .` stays light; `pip install -e .[models]` adds the offline

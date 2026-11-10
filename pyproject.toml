@@ -9,7 +9,6 @@ description = "Early wildfire threat forecasting for evacuation zones"
 requires-python = ">=3.10"
 dependencies = [
     "pandas>=2.0",
-    "pydeck>=0.9",
     "streamlit>=1.40",
 ]
 
