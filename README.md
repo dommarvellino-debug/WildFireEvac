@@ -31,6 +31,39 @@ If scikit-survival has no compatible wheel for the local Windows/Python
 combination, use a supported Linux environment such as WSL and install from
 this same project manifest there.
 
+## Live global hotspot map (prototype)
+
+The Streamlit app displays NASA FIRMS satellite hotspot detections globally,
+for Indonesia, or for Kalimantan. These are satellite detections—not verified
+fire perimeters, evacuation boundaries, or model forecasts.
+
+Install the updated project dependencies:
+
+```powershell
+python -m pip install -e .
+```
+
+Set `FIRMS_MAP_KEY` for the current PowerShell session without echoing the
+value, then launch the app:
+
+```powershell
+$secureKey = Read-Host "FIRMS map key" -AsSecureString
+$keyPointer = [Runtime.InteropServices.Marshal]::SecureStringToBSTR($secureKey)
+try {
+    $env:FIRMS_MAP_KEY = [Runtime.InteropServices.Marshal]::PtrToStringBSTR($keyPointer)
+}
+finally {
+    [Runtime.InteropServices.Marshal]::ZeroFreeBSTR($keyPointer)
+}
+python -m streamlit run app.py
+```
+
+The key is read only by the Python backend, never put in browser code or
+committed. Do not paste it into source files, screenshots, issue reports, or
+Git. If a key has been shared publicly or in an unintended place, revoke it
+and use a newly generated key. The feed can query up to five recent days and
+supports NASA FIRMS VIIRS/MODIS NRT sources. Attribution: NASA FIRMS.
+
 ## Kaplan–Meier baseline
 
 The training CSV must contain `time_to_hit_hours` and `event` (1 = observed
