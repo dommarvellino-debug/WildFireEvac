@@ -47,6 +47,266 @@ REFRESH_OPTIONS = {
     "30 minutes": "30m",
 }
 REPORT_WINDOWS = (7, 14, 30)
+PAGE_SIZE = 10
+
+UI_CSS = """
+<style>
+:root {
+  --wf-bg: #08090b;
+  --wf-card: #101216;
+  --wf-card-2: #14171b;
+  --wf-border: #23262c;
+  --wf-text: #e9ecef;
+  --wf-muted: #9aa1a9;
+  --wf-accent: #c9f56b;
+  --wf-accent-2: #b692f6;
+  --wf-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;
+}
+
+html, body, [data-testid="stAppViewContainer"] {
+  background-color: var(--wf-bg);
+  color: var(--wf-text);
+  font-family: -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+}
+[data-testid="stAppViewContainer"] {
+  background-image:
+    radial-gradient(900px 480px at 10% -10%, rgba(201, 245, 107, 0.07), transparent 60%),
+    radial-gradient(720px 420px at 92% -4%, rgba(182, 146, 246, 0.06), transparent 62%);
+}
+[data-testid="stHeader"] { background: transparent; }
+[data-testid="stToolbar"] { right: 0.6rem; }
+#MainMenu, footer { visibility: hidden; }
+[data-testid="stMainBlockContainer"], .block-container {
+  padding: 1.2rem 2rem 3rem;
+  max-width: 1440px;
+}
+a { color: var(--wf-accent); }
+hr { border-color: var(--wf-border); }
+
+/* ---------- sidebar ---------- */
+[data-testid="stSidebar"] {
+  background: #0b0d10;
+  border-right: 1px solid var(--wf-border);
+}
+[data-testid="stSidebar"] > div { background: transparent; }
+[data-testid="stSidebar"] h2 {
+  font-size: 0.72rem;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--wf-muted);
+  margin-bottom: 0.35rem;
+}
+.wf-side-brand { display: flex; align-items: center; gap: 10px; margin: 2px 0 18px; }
+.wf-side-brand .glyph {
+  width: 34px; height: 34px; display: grid; place-items: center;
+  border: 1px solid var(--wf-border); border-radius: 12px;
+  background: var(--wf-card); font-size: 17px;
+}
+.wf-side-brand b { display: block; font-size: 14px; letter-spacing: -0.01em; }
+.wf-side-brand span { display: block; font-size: 11px; color: var(--wf-muted); }
+
+/* ---------- top bar ---------- */
+.wf-topbar {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 20px; flex-wrap: wrap; margin: 0 0 20px;
+}
+.wf-brand { margin: 0; font-size: 22px !important; font-weight: 680; letter-spacing: -0.02em; }
+.wf-tagline {
+  margin: 5px 0 0; max-width: 72ch; color: var(--wf-muted);
+  font-size: 13px !important; line-height: 1.5 !important;
+}
+.wf-pills { display: flex; flex-wrap: wrap; gap: 8px; justify-content: flex-end; }
+.wf-pill {
+  display: inline-flex; align-items: center; gap: 7px;
+  border: 1px solid var(--wf-border); border-radius: 999px;
+  padding: 5px 11px; font-size: 11.5px; color: #cfd6dd;
+  background: rgba(255, 255, 255, 0.02); white-space: nowrap;
+}
+.wf-pill.wf-warn { border-color: rgba(255, 159, 67, 0.35); color: #ffb066; }
+.wf-dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  background: var(--wf-accent); display: inline-block;
+}
+
+/* ---------- bento ---------- */
+.wf-bento {
+  display: grid; grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px; margin: 0 0 22px;
+}
+.wf-tile {
+  position: relative; min-width: 0; overflow: hidden;
+  border: 1px solid var(--wf-border); border-radius: 22px;
+  padding: 16px 18px;
+  background: linear-gradient(180deg, var(--wf-card-2) 0%, var(--wf-card) 100%);
+}
+.wf-tile::after {
+  content: ""; position: absolute; inset: 0; pointer-events: none;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 42%);
+}
+.wf-span2 { grid-column: span 2; }
+.wf-span3 { grid-column: span 3; }
+@media (max-width: 1200px) {
+  .wf-bento { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .wf-span3 { grid-column: span 2; }
+}
+@media (max-width: 700px) {
+  .wf-bento { grid-template-columns: 1fr; }
+  .wf-span2, .wf-span3 { grid-column: span 1; }
+}
+
+.wf-eyebrow {
+  margin: 0 0 12px; font-size: 10.5px !important; line-height: 1.4 !important;
+  font-weight: 600; letter-spacing: 0.14em; text-transform: uppercase;
+  color: var(--wf-muted);
+}
+.wf-hero-head {
+  display: flex; justify-content: space-between; align-items: flex-start;
+  gap: 16px; flex-wrap: wrap;
+}
+.wf-hero-num {
+  margin: 0; font-family: var(--wf-mono); font-size: 46px !important;
+  line-height: 1 !important; font-weight: 600; letter-spacing: -0.04em;
+  color: #fff;
+}
+.wf-hero-sub {
+  margin: 7px 0 0; font-size: 12.5px !important; line-height: 1.45 !important;
+  color: var(--wf-muted);
+}
+.wf-status {
+  display: inline-flex; align-items: center; gap: 6px;
+  border-radius: 999px; padding: 3px 10px;
+  background: rgba(201, 245, 107, 0.1); color: var(--wf-accent);
+  font-size: 11px; font-weight: 600; white-space: nowrap;
+}
+.wf-strip { display: flex; align-items: flex-end; gap: 3px; height: 72px; margin-top: 18px; }
+.wf-strip span { flex: 1; min-width: 0; border-radius: 4px; background: var(--wf-accent); }
+.wf-strip-labels {
+  display: flex; justify-content: space-between; gap: 8px; margin-top: 8px;
+  font-family: var(--wf-mono); font-size: 10.5px; color: var(--wf-muted);
+}
+
+.wf-seg {
+  display: flex; height: 34px; gap: 2px; overflow: hidden;
+  border-radius: 10px; background: #1a1d22;
+}
+.wf-seg i { display: block; height: 100%; }
+.wf-legend {
+  list-style: none; margin: 14px 0 0; padding: 0;
+  display: grid; grid-template-columns: 1fr 1fr; gap: 9px 14px;
+}
+.wf-legend li {
+  display: flex; align-items: center; justify-content: space-between;
+  gap: 8px; font-size: 12px; color: #cfd5db;
+}
+.wf-legend b { font-family: var(--wf-mono); font-weight: 600; color: #fff; }
+.wf-swatch {
+  width: 8px; height: 8px; border-radius: 50%;
+  display: inline-block; margin-right: 7px;
+}
+
+.wf-kv {
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: 6.5px 0; border-bottom: 1px dashed #1d2025; font-size: 12.5px;
+}
+.wf-kv:last-child { border-bottom: none; }
+.wf-kv span { color: var(--wf-muted); }
+.wf-kv b { font-family: var(--wf-mono); font-weight: 600; color: #eef1f4; }
+
+.wf-trend { display: block; width: 100%; height: 148px; margin-top: 2px; }
+.wf-trend-labels {
+  display: flex; justify-content: space-between; gap: 8px; margin-top: 4px;
+  font-family: var(--wf-mono); font-size: 10.5px; color: var(--wf-muted);
+}
+
+.wf-rows { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 11px; }
+.wf-rows li { display: flex; flex-direction: column; gap: 6px; }
+.wf-row { display: flex; justify-content: space-between; gap: 10px; font-size: 12.5px; }
+.wf-row b { font-family: var(--wf-mono); font-weight: 600; color: #fff; }
+.wf-rows .bar { height: 4px; border-radius: 999px; background: #23262c; overflow: hidden; }
+.wf-rows .bar i { display: block; height: 100%; border-radius: 999px; background: var(--wf-accent); opacity: 0.75; }
+
+.wf-big {
+  margin: 2px 0 0; font-family: var(--wf-mono); font-size: 38px !important;
+  line-height: 1 !important; font-weight: 600; letter-spacing: -0.035em;
+  color: #fff;
+}
+.wf-note {
+  margin: 9px 0 0; font-size: 11.5px !important; line-height: 1.55 !important;
+  color: var(--wf-muted);
+}
+.wf-cta {
+  display: inline-block; margin-top: 12px; font-size: 12px;
+  color: var(--wf-accent); text-decoration: none;
+  border-bottom: 1px solid rgba(201, 245, 107, 0.35); padding-bottom: 1px;
+}
+.wf-cta:hover { color: #e4ff9f; border-color: #e4ff9f; }
+
+/* ---------- report list ---------- */
+.wf-section { display: flex; justify-content: space-between; gap: 16px; align-items: baseline; margin: 6px 0 12px; }
+.wf-section h2 { margin: 0; font-size: 15px !important; font-weight: 650; letter-spacing: -0.01em; }
+.wf-section p { margin: 0; font-size: 12px !important; color: var(--wf-muted); }
+.wf-pager-info {
+  text-align: center; padding-top: 8px; font-family: var(--wf-mono);
+  font-size: 11px; color: var(--wf-muted);
+}
+
+/* ---------- widgets ---------- */
+[data-testid="stExpander"] details {
+  border: 1px solid var(--wf-border) !important;
+  border-radius: 18px !important;
+  background: linear-gradient(180deg, var(--wf-card-2), var(--wf-card)) !important;
+  overflow: hidden;
+}
+[data-testid="stExpander"] summary { padding: 13px 16px !important; font-size: 13.5px !important; }
+[data-testid="stExpander"] summary:hover { background: rgba(255, 255, 255, 0.025); }
+[data-testid="stExpander"] [data-testid="stExpanderDetails"] { padding: 2px 16px 16px !important; }
+
+[data-baseweb="tab-list"] { gap: 6px; border-bottom: 1px solid var(--wf-border); }
+[data-baseweb="tab"] {
+  height: auto; padding: 8px 15px; border-radius: 999px;
+  color: var(--wf-muted); background: transparent;
+}
+[data-baseweb="tab"][aria-selected="true"] {
+  color: var(--wf-accent); background: rgba(201, 245, 107, 0.1);
+}
+[data-baseweb="tab-highlight"], [data-baseweb="tab-border"] { background: transparent; }
+
+[role="tablist"] { gap: 6px; border-bottom: 1px solid var(--wf-border); }
+[data-testid="stTab"] {
+  padding: 8px 15px !important; border-radius: 999px !important;
+  color: var(--wf-muted);
+}
+[data-testid="stTab"] p { margin: 0 !important; font-size: 13px !important; }
+[data-testid="stTab"][aria-selected="true"] {
+  background: rgba(201, 245, 107, 0.1) !important;
+}
+[data-testid="stTab"][aria-selected="true"] p { color: var(--wf-accent) !important; }
+
+[data-testid="stBaseButton-secondary"] {
+  border-radius: 999px; border: 1px solid var(--wf-border);
+  background: #15181d; color: #dfe4e9;
+}
+[data-testid="stBaseButton-secondary"]:hover { border-color: #3a3f47; color: #fff; }
+[data-testid="stBaseButton-primary"] {
+  border-radius: 999px; background: var(--wf-accent);
+  border: 1px solid var(--wf-accent); color: #0a0b0d; font-weight: 650;
+}
+[data-testid="stBaseButton-primary"]:hover {
+  background: #d8ff7f; border-color: #d8ff7f; color: #0a0b0d;
+}
+[data-testid="stAlert"] {
+  border-radius: 16px; border: 1px solid var(--wf-border); background: var(--wf-card);
+}
+[data-testid="stDeckGlJsonChart"], [data-testid="stPydeckChart"] {
+  border: 1px solid var(--wf-border); border-radius: 22px; overflow: hidden;
+}
+[data-testid="stDataFrame"] { border-radius: 14px; overflow: hidden; }
+</style>
+"""
+
+
+def inject_theme() -> None:
+    st.markdown(UI_CSS, unsafe_allow_html=True)
 
 
 @dataclass
@@ -276,6 +536,235 @@ def render_report_detail(row) -> None:
     render_related_news(row)
 
 
+def _date_label(days_ago: int) -> str:
+    day = pd.Timestamp.now(tz="UTC").normalize() - pd.Timedelta(days=days_ago)
+    return f"{day:%b} {day.day}"
+
+
+def _daily_counts(reports: pd.DataFrame, column: str, days: int) -> list[int]:
+    end = pd.Timestamp.now(tz="UTC").normalize().tz_localize(None)
+    index = pd.date_range(end=end, periods=days, freq="D")
+    if reports.empty or column not in reports.columns:
+        return [0] * days
+    values = pd.to_datetime(reports[column], errors="coerce")
+    if getattr(values.dt, "tz", None) is not None:
+        values = values.dt.tz_localize(None)
+    counts = values.dt.normalize().value_counts().reindex(index, fill_value=0)
+    return [int(count) for count in counts.tolist()]
+
+
+def _strip_bars(values: list[int], accent: str = "#c9f56b") -> str:
+    high = max(values) or 1
+    total = len(values)
+    bars = []
+    for index, value in enumerate(values):
+        height = max(4, round(value / high * 100))
+        label = _date_label(total - 1 - index)
+        if value == 0:
+            bars.append(
+                f'<span style="height:{height}%;background:#23262c" '
+                f'title="{label}: 0 reports"></span>'
+            )
+        else:
+            opacity = 0.3 + 0.7 * (value / high)
+            bars.append(
+                f'<span style="height:{height}%;background:{accent};'
+                f'opacity:{opacity:.2f}" title="{label}: {value} report(s)"></span>'
+            )
+    return f'<div class="wf-strip">{"".join(bars)}</div>'
+
+
+def _trend_svg(values: list[int], accent: str = "#c9f56b") -> str:
+    width, height, pad = 620, 148, 6
+    high = max(values) or 1
+    span = width - 2 * pad
+    step = span / max(1, len(values) - 1)
+    points = [
+        (pad + index * step, height - pad - (value / high) * (height - 2 * pad))
+        for index, value in enumerate(values)
+    ]
+    line = " ".join(f"{x:.1f},{y:.1f}" for x, y in points)
+    area = (
+        f"{pad},{height - pad} "
+        + line
+        + f" {points[-1][0]:.1f},{height - pad}"
+    )
+    grid = "".join(
+        f'<line x1="{pad}" x2="{width - pad}" y1="{height * fraction:.0f}" '
+        f'y2="{height * fraction:.0f}" stroke="#1e2227" stroke-width="1" '
+        f'stroke-dasharray="2 6"/>'
+        for fraction in (0.3, 0.55, 0.8)
+    )
+    return (
+        f'<svg class="wf-trend" viewBox="0 0 {width} {height}" '
+        f'preserveAspectRatio="none" role="img" aria-label="Daily report starts">'
+        f'<defs><linearGradient id="wf-trend-fill" x1="0" y1="0" x2="0" y2="1">'
+        f'<stop offset="0" stop-color="{accent}" stop-opacity="0.30"/>'
+        f'<stop offset="1" stop-color="{accent}" stop-opacity="0"/>'
+        f"</linearGradient></defs>"
+        f"{grid}"
+        f'<polygon points="{area}" fill="url(#wf-trend-fill)"/>'
+        f'<polyline points="{line}" fill="none" stroke="{accent}" '
+        f'stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>'
+        f"</svg>"
+    )
+
+
+def _tile(title: str, body: str, span: int = 1) -> str:
+    span_class = " wf-span2" if span == 2 else " wf-span3" if span == 3 else ""
+    return (
+        f'<section class="wf-tile{span_class}">'
+        f'<p class="wf-eyebrow">{title}</p>{body}</section>'
+    )
+
+
+def render_bento(*tiles: str) -> None:
+    st.markdown(
+        f'<div class="wf-bento">{"".join(tiles)}</div>', unsafe_allow_html=True
+    )
+
+
+def render_report_bento(
+    reports: pd.DataFrame,
+    counts,
+    window_days: int,
+    include_ended: bool,
+    alert_levels: list[str],
+    snapshot: FeedSnapshot,
+    has_key: bool,
+) -> None:
+    total = len(reports)
+    daily = _daily_counts(reports, "from_date", window_days)
+    countries = 0
+    if "country" in reports.columns:
+        countries = int(
+            reports["country"].dropna().astype(str).str.strip().replace("", pd.NA).dropna().nunique()
+        )
+
+    hero = _tile(
+        "Global wildfire reports",
+        (
+            '<div class="wf-hero-head">'
+            "<div>"
+            f'<p class="wf-hero-num">{total:,}</p>'
+            f'<p class="wf-hero-sub">reports match the current filters · last {window_days} days</p>'
+            "</div>"
+            '<span class="wf-status"><span class="wf-dot"></span>GDACS live</span>'
+            "</div>"
+            f"{_strip_bars(daily)}"
+            '<div class="wf-strip-labels">'
+            f"<span>{_date_label(window_days - 1)}</span>"
+            "<span>new reports per day</span>"
+            "<span>today</span>"
+            "</div>"
+        ),
+        span=2,
+    )
+
+    levels = ("Red", "Orange", "Green")
+    segments = "".join(
+        f'<i style="width:{((counts.get(level, 0) / total) * 100) if total else 0:.2f}%;'
+        f'background:{ALERT_COLORS[level]}"></i>'
+        for level in levels
+    )
+    legend = "".join(
+        f'<li><span><i class="wf-swatch" style="background:{ALERT_COLORS[level]}"></i>'
+        f"{level}</span><b>{int(counts.get(level, 0)):,}</b></li>"
+        for level in levels
+    )
+    alert_tile = _tile(
+        "Alert mix",
+        f'<div class="wf-seg">{segments}</div><ul class="wf-legend">{legend}</ul>',
+    )
+
+    filter_label = (
+        "All levels"
+        if set(alert_levels) >= {"Red", "Orange", "Green"}
+        else (", ".join(alert_levels) or "none")
+    )
+    data_tile = _tile(
+        "Data",
+        (
+            f'<div class="wf-kv"><span>Updated</span>'
+            f"<b>{_fmt_timestamp(snapshot.fetched_wall)}</b></div>"
+            f'<div class="wf-kv"><span>Window</span><b>{window_days}d</b></div>'
+            f'<div class="wf-kv"><span>Alerts</span>'
+            f"<b>{html.escape(filter_label)}</b></div>"
+            f'<div class="wf-kv"><span>Ended</span>'
+            f'<b>{"shown" if include_ended else "hidden"}</b></div>'
+            f'<div class="wf-kv"><span>Countries</span><b>{countries:,}</b></div>'
+        ),
+    )
+
+    trend_tile = _tile(
+        "Reports per day",
+        (
+            f"{_trend_svg(daily)}"
+            '<div class="wf-trend-labels">'
+            f"<span>{_date_label(window_days - 1)}</span>"
+            f"<span>{sum(daily):,} report starts</span>"
+            "<span>today</span>"
+            "</div>"
+        ),
+        span=2,
+    )
+
+    cached = st.session_state.get("_feed_states", {}).get("firms")
+    hotspots = cached.data if cached is not None else None
+    if hotspots is not None and len(hotspots):
+        latest = (
+            str(hotspots["acq_date"].max()) if "acq_date" in hotspots.columns else "—"
+        )
+        sat_body = (
+            f'<p class="wf-big">{len(hotspots):,}</p>'
+            f'<p class="wf-note">hotspot detections cached from the Live Map · '
+            f"latest observation {html.escape(latest)}</p>"
+        )
+    elif has_key:
+        sat_body = (
+            '<p class="wf-big">Ready</p>'
+            '<p class="wf-note">FIRMS key detected. Open the Live Map to load '
+            "satellite detections.</p>"
+        )
+    else:
+        sat_body = (
+            '<p class="wf-big">Locked</p>'
+            '<p class="wf-note">Satellite hotspots need a free NASA FIRMS key.</p>'
+            '<a class="wf-cta" href="https://firms.modaps.eosdis.nasa.gov/api/map_key/" '
+            'target="_blank" rel="noopener noreferrer">Get a map key →</a>'
+        )
+    satellite_tile = _tile("Satellite detections", sat_body)
+
+    top_countries = pd.Series(dtype=int)
+    if "country" in reports.columns:
+        top_countries = (
+            reports["country"]
+            .dropna()
+            .astype(str)
+            .str.strip()
+            .replace("", pd.NA)
+            .dropna()
+            .value_counts()
+            .head(4)
+        )
+    if top_countries.empty:
+        countries_body = '<p class="wf-note">No country data for this selection.</p>'
+    else:
+        peak = int(top_countries.max()) or 1
+        rows = "".join(
+            f'<li><div class="wf-row"><span>{html.escape(str(country))}</span>'
+            f'<b>{int(count):,}</b></div>'
+            f'<div class="bar"><i style="width:{count / peak * 100:.0f}%"></i></div></li>'
+            for country, count in top_countries.items()
+        )
+        countries_body = f'<ul class="wf-rows">{rows}</ul>'
+    countries_tile = _tile("Top countries", countries_body)
+
+    render_bento(
+        hero, alert_tile, data_tile, trend_tile, satellite_tile, countries_tile
+    )
+
+
 def render_reports(
     snapshot: FeedSnapshot,
     include_ended: bool,
@@ -290,15 +779,17 @@ def render_reports(
         st.info("Select at least one alert level in the sidebar.")
         return
 
-    reports = snapshot.data
-    reports = filter_reports(reports, include_ended, alert_levels)
-
+    reports = filter_reports(snapshot.data, include_ended, alert_levels)
     counts = reports["alert_level"].value_counts() if not reports.empty else {}
-    metrics = st.columns(4)
-    metrics[0].metric("Reports", f"{len(reports):,}")
-    for column, level in zip(metrics[1:], ("Red", "Orange", "Green")):
-        column.metric(level, f"{int(counts.get(level, 0)):,}")
-    st.caption(f"GDACS wildfire events · last {window_days} days")
+    render_report_bento(
+        reports,
+        counts,
+        window_days,
+        include_ended,
+        alert_levels,
+        snapshot,
+        bool(os.environ.get("FIRMS_MAP_KEY", "").strip()),
+    )
 
     if reports.empty:
         st.info(
@@ -310,10 +801,51 @@ def render_reports(
     ordered = reports.assign(
         _rank=reports["alert_level"].map(ALERT_RANK)
     ).sort_values(["_rank", "from_date"], ascending=[True, False], kind="stable")
-    for row in ordered.itertuples(index=False):
+
+    st.markdown(
+        '<div class="wf-section"><h2>Reports</h2>'
+        "<p>Newest first · open a card for details and related news</p></div>",
+        unsafe_allow_html=True,
+    )
+
+    pages = max(1, (len(ordered) + PAGE_SIZE - 1) // PAGE_SIZE)
+    signature = (window_days, tuple(alert_levels), include_ended)
+    if st.session_state.get("_report_filter_sig") != signature:
+        st.session_state["_report_filter_sig"] = signature
+        st.session_state["_report_page"] = 0
+    page = min(int(st.session_state.get("_report_page", 0)), pages - 1)
+    st.session_state["_report_page"] = page
+    start = page * PAGE_SIZE
+
+    for row in ordered.iloc[start : start + PAGE_SIZE].itertuples(index=False):
         label = " · ".join(part for part in (row.name, row.country) if part)
         with st.expander(f"{label} ({row.alert_level})"):
             render_report_detail(row)
+
+    if pages > 1:
+        prev_col, info_col, next_col = st.columns([1, 2, 1])
+        if prev_col.button(
+            "← Newer",
+            key="reports_prev",
+            disabled=page == 0,
+            use_container_width=True,
+        ):
+            st.session_state["_report_page"] = page - 1
+            st.rerun()
+        info_col.markdown(
+            f'<div class="wf-pager-info">Reports {start + 1:,}–'
+            f"{min(start + PAGE_SIZE, len(ordered)):,} of {len(ordered):,} · "
+            f"page {page + 1:,} of {pages:,}</div>",
+            unsafe_allow_html=True,
+        )
+        if next_col.button(
+            "Older →",
+            key="reports_next",
+            disabled=page >= pages - 1,
+            use_container_width=True,
+        ):
+            st.session_state["_report_page"] = page + 1
+            st.rerun()
 
 
 def _rgb(color: str) -> list[int]:
@@ -370,6 +902,7 @@ def render_live_map(
     area_name: str,
     events: pd.DataFrame,
     has_key: bool,
+    feed_note: str = "",
 ) -> None:
     hotspots = snapshot.data if has_key and snapshot is not None else None
     if has_key and snapshot is not None:
@@ -380,20 +913,60 @@ def render_live_map(
         mapped = events.dropna(subset=["latitude", "longitude"]).copy()
     else:
         mapped = events.head(0).copy()
+
+    coverage_note = feed_note or area_name
     if hotspots is not None:
-        metrics = st.columns(3)
-        metrics[0].metric("Detections", f"{len(hotspots):,}")
-        metrics[1].metric(
-            "Latest observation date",
+        latest = (
             str(hotspots["acq_date"].max())
             if len(hotspots) and "acq_date" in hotspots
-            else "—",
+            else "—"
         )
-        metrics[2].metric("Feed", "NASA FIRMS")
+        render_bento(
+            _tile(
+                "Satellite detections",
+                f'<p class="wf-big">{len(hotspots):,}</p>'
+                '<p class="wf-note">NASA FIRMS near-real-time detections</p>',
+            ),
+            _tile(
+                "Latest observation",
+                f'<p class="wf-big">{html.escape(latest)}</p>'
+                '<p class="wf-note">acquisition date (UTC)</p>',
+            ),
+            _tile(
+                "Reports on map",
+                f'<p class="wf-big">{len(mapped):,}</p>'
+                '<p class="wf-note">GDACS reports with coordinates</p>',
+            ),
+            _tile(
+                "Coverage",
+                f'<p class="wf-big">{html.escape(area_name)}</p>'
+                f'<p class="wf-note">{html.escape(coverage_note)}</p>',
+            ),
+        )
         if hotspots.empty:
             st.warning("No satellite detections were returned for this selection.")
     else:
-        st.metric("Reports on map", f"{len(mapped):,}")
+        render_bento(
+            _tile(
+                "Reports on map",
+                f'<p class="wf-big">{len(mapped):,}</p>'
+                '<p class="wf-note">GDACS reports with coordinates</p>',
+            ),
+            _tile(
+                "Coverage",
+                f'<p class="wf-big">{html.escape(area_name)}</p>'
+                f'<p class="wf-note">{html.escape(coverage_note)}</p>',
+            ),
+            _tile(
+                "Satellite detections",
+                '<p class="wf-big">Locked</p>'
+                '<p class="wf-note">Add a free NASA FIRMS map key to overlay '
+                "satellite hotspots on the report layer.</p>"
+                '<a class="wf-cta" href="https://firms.modaps.eosdis.nasa.gov/api/map_key/" '
+                'target="_blank" rel="noopener noreferrer">Get a map key →</a>',
+                span=2,
+            ),
+        )
 
     if has_key and hotspots is None and snapshot is not None and snapshot.error:
         st.caption("Showing GDACS reports only while the satellite feed is down.")
@@ -465,11 +1038,11 @@ def render_live_map(
             layers=layers,
             initial_view_state=_map_view_state(area_name),
             map_style=(
-                "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+                "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
             ),
             tooltip={
                 "html": "<b>{label}</b><br/>{detail}",
-                "style": {"backgroundColor": "#202833", "color": "white"},
+                "style": {"backgroundColor": "#14171b", "color": "#e9ecef"},
             },
         )
         st.pydeck_chart(deck, use_container_width=True)
@@ -527,17 +1100,38 @@ def render_live_map(
 
 
 def main() -> None:
-    st.title("WildFireEvac · Global wildfire awareness")
-    st.caption(
-        "Report-first situational awareness: GDACS wildfire events, related "
-        "English news, and NASA FIRMS satellite detections. Not an emergency "
-        "decision tool."
-    )
-
+    inject_theme()
     map_key = os.environ.get("FIRMS_MAP_KEY", "").strip()
 
+    key_pill = (
+        '<span class="wf-pill"><i class="wf-dot"></i>FIRMS key active</span>'
+        if map_key
+        else '<span class="wf-pill wf-warn">FIRMS key not set</span>'
+    )
+    st.markdown(
+        '<div class="wf-topbar">'
+        "<div>"
+        '<p class="wf-brand">🔥 WildFireEvac</p>'
+        '<p class="wf-tagline">Report-first wildfire awareness: GDACS events, '
+        "related English news, and satellite detections. Not an emergency "
+        "decision tool.</p>"
+        "</div>"
+        '<div class="wf-pills">'
+        '<span class="wf-pill"><i class="wf-dot"></i>GDACS live</span>'
+        '<span class="wf-pill">English headlines</span>'
+        f"{key_pill}"
+        "</div>"
+        "</div>",
+        unsafe_allow_html=True,
+    )
+
     with st.sidebar:
-        st.header("Settings")
+        st.markdown(
+            '<div class="wf-side-brand"><span class="glyph">🔥</span>'
+            "<div><b>WildFireEvac</b><span>Global awareness</span></div></div>",
+            unsafe_allow_html=True,
+        )
+        st.header("Refresh")
         auto_refresh = st.toggle("Auto-refresh", value=True)
         interval_label = st.selectbox(
             "Refresh interval",
@@ -567,6 +1161,7 @@ def main() -> None:
                 "them to focus on Orange and Red reports."
             ),
         )
+        include_ended = st.checkbox("Include ended reports", value=False)
 
         st.divider()
         st.header("Satellite feed")
@@ -588,9 +1183,6 @@ def main() -> None:
 
         @st.fragment(run_every=refresh_interval)
         def reports_view() -> None:
-            include_ended = st.checkbox(
-                "Include ended reports", value=False, key="include_ended"
-            )
             snapshot = load_feed(
                 "gdacs",
                 GDACS_TTL_SECONDS,
@@ -628,33 +1220,58 @@ def main() -> None:
             else:
                 events = filter_reports(
                     events,
-                    st.session_state.get("include_ended", False),
+                    include_ended,
                     alert_levels,
                 )
 
             if not map_key:
-                st.info(
-                    "Satellite detections need a free [NASA FIRMS map "
-                    "key](https://firms.modaps.eosdis.nasa.gov/api/map_key/). "
-                    "Set `FIRMS_MAP_KEY` and restart the app to add hotspots; "
-                    "the GDACS report layer works without it."
+                st.caption(
+                    "Satellite hotspots are optional and need a free NASA FIRMS "
+                    "map key; the GDACS report layer works without one."
                 )
-            render_live_map(snapshot, area_name, events, bool(map_key))
+            render_live_map(
+                snapshot,
+                area_name,
+                events,
+                bool(map_key),
+                f"{area_name} · {source} · last {day_range}d",
+            )
 
         map_view()
 
     with forecast_tab:
-        st.info(
-            "Forecast panels arrive in later phases: detection analytics from "
-            "the current feeds, 72-hour fire-weather context for active "
-            "clusters, and optional survival-model probabilities."
-        )
-        st.markdown(
-            "- **Detection analytics** — counts and trends from the FIRMS feed\n"
-            "- **Fire weather** — temperature, humidity, wind, and "
-            "precipitation for active clusters\n"
-            "- **Model estimate** — optional, caveated survival-model "
-            "probabilities"
+        render_bento(
+            _tile(
+                "Forecast roadmap",
+                '<p class="wf-note">Forecast panels arrive in later phases: '
+                "detection analytics from the current feeds, 72-hour fire-weather "
+                "context for active clusters, and optional survival-model "
+                "probabilities.</p>",
+                span=2,
+            ),
+            _tile(
+                "Available now",
+                '<p class="wf-note">Global reports, related English headlines, '
+                "and the GDACS report map need no credentials.</p>",
+            ),
+            _tile(
+                "Needs a FIRMS key",
+                '<p class="wf-note">Satellite detections and the detection '
+                "analytics they feed.</p>",
+            ),
+            _tile(
+                "Model estimate",
+                '<p class="wf-note">Optional research estimate from survival '
+                "models. Caveated, and never an evacuation instruction.</p>",
+                span=2,
+            ),
+            _tile(
+                "Stay grounded",
+                '<p class="wf-note">Reports, headlines, and detections are '
+                "third-party data. Hotspots are not verified fire perimeters. "
+                "Do not use this app for emergency decisions.</p>",
+                span=2,
+            ),
         )
 
     st.divider()
