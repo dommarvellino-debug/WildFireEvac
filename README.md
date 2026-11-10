@@ -81,6 +81,12 @@ python -m streamlit run app.py
 On macOS/Linux, set the variable with `export FIRMS_MAP_KEY=...` in your
 shell, then run the same `streamlit run` command.
 
+The key is read only by the Python backend, never put in browser code or
+committed. Do not paste it into source files, screenshots, issue reports, or
+Git. If a key has been shared publicly or in an unintended place, revoke it
+and use a newly generated key. The feed can query up to five recent days and
+supports NASA FIRMS VIIRS/MODIS NRT sources. Attribution: NASA FIRMS.
+
 The report window uses each event's last GDACS report date, and the sidebar
 can hide low-impact Green alerts or include ended reports.
 
@@ -102,12 +108,6 @@ python -m unittest discover -s tests -p "test_*.py"
 
 The network clients are tested with mocked responses, so the suite runs
 offline.
-
-The key is read only by the Python backend, never put in browser code or
-committed. Do not paste it into source files, screenshots, issue reports, or
-Git. If a key has been shared publicly or in an unintended place, revoke it
-and use a newly generated key. The feed can query up to five recent days and
-supports NASA FIRMS VIIRS/MODIS NRT sources. Attribution: NASA FIRMS.
 
 ## Kaplan–Meier baseline
 
