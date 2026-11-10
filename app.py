@@ -291,9 +291,7 @@ def render_reports(
         return
 
     reports = snapshot.data
-    reports = reports[reports["alert_level"].isin(alert_levels)]
-    if not include_ended and "is_current" in reports.columns:
-        reports = reports[reports["is_current"]]
+    reports = filter_reports(reports, include_ended, alert_levels)
 
     counts = reports["alert_level"].value_counts() if not reports.empty else {}
     metrics = st.columns(4)
@@ -318,93 +316,214 @@ def render_reports(
             render_report_detail(row)
 
 
-def render_live_map(snapshot: FeedSnapshot, area_name: str) -> None:
-    render_feed_status("FIRMS hotspots", snapshot)
-    if snapshot.data is None:
-        return
+def _rgb(color: str) -> list[int]:
+    value = color.lstrip("#")
+    return [int(value[index : index + 2], 16) for index in (0, 2, 4)]
 
-    hotspots = snapshot.data
-    metrics = st.columns(3)
-    metrics[0].metric("Detections", f"{len(hotspots):,}")
-    metrics[1].metric(
-        "Latest observation date",
-        str(hotspots["acq_date"].max())
-        if len(hotspots) and "acq_date" in hotspots
-        else "—",
-    )
-    metrics[2].metric("Feed", "NASA FIRMS")
 
-    if hotspots.empty:
-        st.warning("No detections were returned for this selection.")
-        return
+def filter_reports(
+    reports: pd.DataFrame, include_ended: bool, alert_levels: list[str]
+) -> pd.DataFrame:
+    filtered = reports[reports["alert_level"].isin(alert_levels)]
+    if not include_ended and "is_current" in filtered.columns:
+        filtered = filtered[filtered["is_current"]]
+    return filtered
 
+
+def _map_view_state(area_name: str) -> pdk.ViewState:
     if area_name == "Global":
         longitude, latitude, zoom = 110, 5, 1
     elif area_name == "Indonesia":
         longitude, latitude, zoom = 118, -2, 4
     else:
         longitude, latitude, zoom = 114, -1, 5
-
-    layer = pdk.Layer(
-        "ScatterplotLayer",
-        data=hotspots,
-        get_position="[longitude, latitude]",
-        get_fill_color="[220, 70, 32, 190]",
-        get_line_color="[90, 35, 20, 220]",
-        get_radius=2500,
-        radius_min_pixels=2,
-        radius_max_pixels=12,
-        line_width_min_pixels=1,
-        stroked=True,
-        pickable=True,
+    return pdk.ViewState(
+        longitude=longitude,
+        latitude=latitude,
+        zoom=zoom,
+        min_zoom=0,
+        max_zoom=16,
+        pitch=0,
     )
-    deck = pdk.Deck(
-        layers=[layer],
-        initial_view_state=pdk.ViewState(
-            longitude=longitude,
-            latitude=latitude,
-            zoom=zoom,
-            min_zoom=0,
-            max_zoom=16,
-            pitch=0,
-        ),
-        map_style="https://basemaps.cartocdn.com/gl/positron-gl-style/style.json",
-        tooltip={
-            "html": (
-                "<b>Satellite hotspot</b><br/>"
-                "Observed: {acq_date} {acq_time} UTC<br/>"
-                "Satellite: {satellite}<br/>"
-                "Confidence: {confidence}<br/>"
-                "FRP: {frp} MW"
-            ),
-            "style": {"backgroundColor": "#202833", "color": "white"},
-        },
-    )
-    st.pydeck_chart(deck, use_container_width=True)
 
-    display_columns = [
-        column
-        for column in (
-            "latitude",
-            "longitude",
-            "acq_date",
-            "acq_time",
-            "satellite",
-            "confidence",
-            "frp",
+
+def _hotspot_tooltips(hotspots: pd.DataFrame) -> pd.Series:
+    detail = (
+        "Observed " + hotspots["acq_date"].astype(str) + " "
+        + hotspots["acq_time"].astype(str) + " UTC"
+    )
+    parts = []
+    for prefix, column, suffix in (
+        ("Satellite ", "satellite", ""),
+        ("Confidence ", "confidence", ""),
+        ("FRP ", "frp", " MW"),
+    ):
+        if column in hotspots.columns:
+            parts.append(prefix + hotspots[column].astype(str) + suffix)
+    if parts:
+        detail = detail + " · " + " · ".join(parts)
+    return detail.map(html.escape)
+
+
+def render_live_map(
+    snapshot: FeedSnapshot | None,
+    area_name: str,
+    events: pd.DataFrame,
+    has_key: bool,
+) -> None:
+    hotspots = snapshot.data if has_key and snapshot is not None else None
+    if has_key and snapshot is not None:
+        render_feed_status("FIRMS hotspots", snapshot)
+
+    mapped = events
+    if {"latitude", "longitude"}.issubset(events.columns):
+        mapped = events.dropna(subset=["latitude", "longitude"]).copy()
+    else:
+        mapped = events.head(0).copy()
+    if hotspots is not None:
+        metrics = st.columns(3)
+        metrics[0].metric("Detections", f"{len(hotspots):,}")
+        metrics[1].metric(
+            "Latest observation date",
+            str(hotspots["acq_date"].max())
+            if len(hotspots) and "acq_date" in hotspots
+            else "—",
         )
-        if column in hotspots.columns
-    ]
-    with st.expander("View detection records"):
-        st.dataframe(
-            hotspots[display_columns].sort_values(
-                ["acq_date", "acq_time"],
-                ascending=False,
-                kind="stable",
+        metrics[2].metric("Feed", "NASA FIRMS")
+        if hotspots.empty:
+            st.warning("No satellite detections were returned for this selection.")
+    else:
+        st.metric("Reports on map", f"{len(mapped):,}")
+
+    if has_key and hotspots is None and snapshot is not None and snapshot.error:
+        st.caption("Showing GDACS reports only while the satellite feed is down.")
+
+    layers = []
+    if not mapped.empty:
+        ordered = mapped.assign(_rank=mapped["alert_level"].map(ALERT_RANK))
+        ordered = ordered.sort_values("_rank", ascending=False, kind="stable")
+        detail = []
+        for row in ordered.itertuples(index=False):
+            parts = [str(row.country or "")] if row.country else []
+            if pd.notna(row.from_date):
+                parts.append(f"from {pd.Timestamp(row.from_date):%Y-%m-%d}")
+            if pd.notna(row.to_date):
+                parts.append(f"to {pd.Timestamp(row.to_date):%Y-%m-%d}")
+            parts.append("current" if bool(row.is_current) else "ended")
+            detail.append(html.escape(" · ".join(parts)))
+        event_data = ordered.assign(
+            label=(
+                ordered["name"].astype(str)
+                + " ("
+                + ordered["alert_level"].astype(str)
+                + ")"
+            ).map(html.escape),
+            detail=detail,
+            fill_color=ordered["alert_level"].map(
+                lambda level: _rgb(ALERT_COLORS.get(level, ALERT_COLORS["Unknown"]))
             ),
-            use_container_width=True,
-            hide_index=True,
         )
+        layers.append(
+            pdk.Layer(
+                "ScatterplotLayer",
+                data=event_data,
+                get_position="[longitude, latitude]",
+                get_fill_color="fill_color",
+                get_line_color="[255, 255, 255, 220]",
+                get_radius=35000,
+                radius_min_pixels=5,
+                radius_max_pixels=18,
+                line_width_min_pixels=1,
+                stroked=True,
+                pickable=True,
+            )
+        )
+
+    if hotspots is not None and not hotspots.empty:
+        hotspot_data = hotspots.assign(
+            label="Satellite hotspot",
+            detail=_hotspot_tooltips(hotspots),
+        )
+        layers.append(
+            pdk.Layer(
+                "ScatterplotLayer",
+                data=hotspot_data,
+                get_position="[longitude, latitude]",
+                get_fill_color="[220, 70, 32, 190]",
+                get_line_color="[90, 35, 20, 220]",
+                get_radius=2500,
+                radius_min_pixels=2,
+                radius_max_pixels=12,
+                line_width_min_pixels=1,
+                stroked=True,
+                pickable=True,
+            )
+        )
+
+    if layers:
+        deck = pdk.Deck(
+            layers=layers,
+            initial_view_state=_map_view_state(area_name),
+            map_style=(
+                "https://basemaps.cartocdn.com/gl/positron-gl-style/style.json"
+            ),
+            tooltip={
+                "html": "<b>{label}</b><br/>{detail}",
+                "style": {"backgroundColor": "#202833", "color": "white"},
+            },
+        )
+        st.pydeck_chart(deck, use_container_width=True)
+        st.caption(
+            "Large points: GDACS wildfire reports, coloured by alert level. "
+            "Small points: NASA FIRMS hotspot detections. Detections are not "
+            "fire perimeters."
+        )
+    else:
+        st.info("No reports or detections to map for this selection.")
+
+    if hotspots is not None and not hotspots.empty:
+        display_columns = [
+            column
+            for column in (
+                "latitude",
+                "longitude",
+                "acq_date",
+                "acq_time",
+                "satellite",
+                "confidence",
+                "frp",
+            )
+            if column in hotspots.columns
+        ]
+        with st.expander("View detection records"):
+            st.dataframe(
+                hotspots[display_columns].sort_values(
+                    ["acq_date", "acq_time"],
+                    ascending=False,
+                    kind="stable",
+                ),
+                use_container_width=True,
+                hide_index=True,
+            )
+
+    if not mapped.empty:
+        report_columns = [
+            column
+            for column in (
+                "name",
+                "country",
+                "alert_level",
+                "from_date",
+                "to_date",
+                "latitude",
+                "longitude",
+            )
+            if column in mapped.columns
+        ]
+        with st.expander("View mapped reports"):
+            st.dataframe(
+                mapped[report_columns], use_container_width=True, hide_index=True
+            )
 
 
 def main() -> None:
@@ -455,8 +574,8 @@ def main() -> None:
         source = st.selectbox("Satellite feed", SUPPORTED_SOURCES, index=2)
         day_range = st.slider("Look-back (days)", min_value=1, max_value=5, value=1)
         st.caption(
-            "NASA FIRMS near-real-time detections; 1–5 day query range. The "
-            "Live Map needs a free FIRMS map key."
+            "The Live Map plots GDACS reports without a key; NASA FIRMS "
+            "hotspot detections need a free FIRMS map key."
         )
 
     refresh_interval = REFRESH_OPTIONS[interval_label] if auto_refresh else None
@@ -485,13 +604,6 @@ def main() -> None:
 
         @st.fragment(run_every=refresh_interval)
         def map_view() -> None:
-            if not map_key:
-                st.info(
-                    "`FIRMS_MAP_KEY` is not set. The Live Map needs a free NASA "
-                    "FIRMS map key; Reports and related news still work without "
-                    "one. See the README for setup."
-                )
-                return
             snapshot = load_feed(
                 "firms",
                 FIRMS_TTL_SECONDS,
@@ -501,8 +613,33 @@ def main() -> None:
                     area=AREA_BOUNDS[area_name],
                     day_range=day_range,
                 ),
+            ) if map_key else None
+
+            events_snapshot = load_feed(
+                "gdacs",
+                GDACS_TTL_SECONDS,
+                lambda: fetch_wildfire_events(days=reports_days),
             )
-            render_live_map(snapshot, area_name)
+            render_feed_status("GDACS reports", events_snapshot)
+
+            events = events_snapshot.data
+            if events is None:
+                events = pd.DataFrame()
+            else:
+                events = filter_reports(
+                    events,
+                    st.session_state.get("include_ended", False),
+                    alert_levels,
+                )
+
+            if not map_key:
+                st.info(
+                    "Satellite detections need a free [NASA FIRMS map "
+                    "key](https://firms.modaps.eosdis.nasa.gov/api/map_key/). "
+                    "Set `FIRMS_MAP_KEY` and restart the app to add hotspots; "
+                    "the GDACS report layer works without it."
+                )
+            render_live_map(snapshot, area_name, events, bool(map_key))
 
         map_view()
 

@@ -62,7 +62,9 @@ Constraints inherited from the current design that the plan must respect:
 related news inline (see "News-to-report matching rules" below).
 
 ### Tab: Live Map (extends what exists today)
-- Existing pydeck hotspot layer, metrics row, and records expander.
+- pydeck layers: GDACS reports coloured by alert level (no credentials) plus
+  NASA FIRMS hotspot detections when a map key is configured.
+- Existing metrics row and records expanders, plus a mapped-reports table.
 - New: per-country/region detection counts and a daily-detections trend chart
   over the look-back window; "stale data" badge when the last fetch failed.
 
@@ -355,9 +357,10 @@ Publishing checklist (after Phase 1):
 ### 11.2 Each user needs their own FIRMS key
 The FIRMS map key is personal and rate-limited; it must not be redistributed.
 Registration is free. Fix: make the app degrade gracefully — without a key,
-the Live Map tab shows a short "set FIRMS_MAP_KEY" setup notice while
-Reports, News, and Forecast weather still work, since those sources need no
-key. This replaces the current `st.stop()` in `app.py`.
+the Live Map tab still renders the GDACS report layer and shows a short
+"set FIRMS_MAP_KEY" notice for hotspots, while Reports, News, and Forecast
+weather still work, since those sources need no key. This replaces the
+current `st.stop()` in `app.py`.
 
 ### 11.3 Installation friction
 `pyproject.toml` installs the full model stack for everyone. On this machine
