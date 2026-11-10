@@ -58,6 +58,10 @@ limited. The **Live Map** tab shows NASA FIRMS satellite hotspot detections
 globally, for Indonesia, or for Kalimantan. These are satellite detections—not
 verified fire perimeters, evacuation boundaries, or model forecasts.
 
+<img src="docs/screenshots/reports.png" alt="Reports tab listing global GDACS wildfire reports" width="900">
+
+<img src="docs/screenshots/report-news.png" alt="A report expanded with related English news headlines" width="900">
+
 Reports and related news need no credentials. The Live Map needs a free NASA
 FIRMS map key (register on the [FIRMS API map key
 page](https://firms.modaps.eosdis.nasa.gov/api/map_key/)). Without a key the
