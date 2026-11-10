@@ -442,7 +442,7 @@ def _news_timespan(from_date) -> str:
     return f"{min(max(days, 7), 90)}d"
 
 
-def render_related_news(row) -> None:
+def render_related_news(row, key_prefix: str = "") -> None:
     st.divider()
     st.markdown("**Related news**")
     st.caption(
@@ -451,7 +451,9 @@ def render_related_news(row) -> None:
     )
 
     requested = st.session_state.setdefault("_news_requested", set())
-    if st.button("Find related news", key=f"news-button-{row.event_id}"):
+    if st.button(
+        "Find related news", key=f"{key_prefix}news-button-{row.event_id}"
+    ):
         requested.add(row.event_id)
     if row.event_id not in requested:
         st.caption("Select **Find related news** to search for this report.")
@@ -496,7 +498,7 @@ def render_related_news(row) -> None:
         )
 
 
-def render_report_detail(row) -> None:
+def render_report_detail(row, key_prefix: str = "") -> None:
     color = ALERT_COLORS.get(row.alert_level, ALERT_COLORS["Unknown"])
     level = html.escape(str(row.alert_level))
     st.markdown(
@@ -533,7 +535,7 @@ def render_report_detail(row) -> None:
     if links:
         st.markdown(" · ".join(links), unsafe_allow_html=True)
 
-    render_related_news(row)
+    render_related_news(row, key_prefix)
 
 
 def _date_label(days_ago: int) -> str:
@@ -862,6 +864,74 @@ def filter_reports(
     return filtered
 
 
+def _selected_map_object(event) -> tuple[str, dict | None]:
+    """Pull the first clicked deck.gl object out of the widget event state."""
+    if event is None:
+        return "", None
+    selection = getattr(event, "selection", None)
+    if selection is None and isinstance(event, dict):
+        selection = event.get("selection")
+    objects = getattr(selection, "objects", None)
+    if objects is None and isinstance(selection, dict):
+        objects = selection.get("objects")
+    if isinstance(objects, list):
+        for item in objects:
+            if isinstance(item, dict):
+                return "", item
+        return "", None
+    for layer_id, items in (objects or {}).items():
+        for item in items or []:
+            if isinstance(item, dict):
+                return str(layer_id), item
+    return "", None
+
+
+def render_selected_map_object(clicked: dict, events: pd.DataFrame) -> None:
+    event_id = str(clicked.get("event_id") or "")
+    match = (
+        events[events["event_id"].astype(str) == event_id]
+        if event_id
+        else events.head(0)
+    )
+    if not match.empty:
+        row = match.iloc[0]
+        st.markdown(
+            '<div class="wf-section"><h2>Selected report</h2>'
+            "<p>Click another point to switch · use Dismiss to close</p></div>",
+            unsafe_allow_html=True,
+        )
+        label = " · ".join(
+            str(part)
+            for part in (row["name"], row["country"])
+            if pd.notna(part) and str(part).strip()
+        )
+        with st.expander(f"{label} ({row['alert_level']})", expanded=True):
+            render_report_detail(row, key_prefix="map-")
+        return
+
+    st.markdown(
+        '<div class="wf-section"><h2>Selected detection</h2>'
+        "<p>Satellite hotspot · not a verified fire report</p></div>",
+        unsafe_allow_html=True,
+    )
+    parts = []
+    observed = " ".join(
+        str(clicked.get(key))
+        for key in ("acq_date", "acq_time")
+        if clicked.get(key)
+    )
+    if observed:
+        parts.append(f"Observed {observed} UTC")
+    for label_text, key, suffix in (
+        ("Satellite", "satellite", ""),
+        ("Confidence", "confidence", ""),
+        ("FRP", "frp", " MW"),
+    ):
+        if clicked.get(key) not in (None, ""):
+            parts.append(f"{label_text} {clicked[key]}{suffix}")
+    st.info(" · ".join(parts) or "Detection details are unavailable.")
+
+
 def _map_view_state(area_name: str) -> pdk.ViewState:
     if area_name == "Global":
         longitude, latitude, zoom = 110, 5, 1
@@ -984,21 +1054,29 @@ def render_live_map(
                 parts.append(f"to {pd.Timestamp(row.to_date):%Y-%m-%d}")
             parts.append("current" if bool(row.is_current) else "ended")
             detail.append(html.escape(" · ".join(parts)))
-        event_data = ordered.assign(
-            label=(
-                ordered["name"].astype(str)
-                + " ("
-                + ordered["alert_level"].astype(str)
-                + ")"
-            ).map(html.escape),
-            detail=detail,
-            fill_color=ordered["alert_level"].map(
-                lambda level: _rgb(ALERT_COLORS.get(level, ALERT_COLORS["Unknown"]))
-            ),
+        event_data = pd.DataFrame(
+            {
+                "longitude": ordered["longitude"],
+                "latitude": ordered["latitude"],
+                "event_id": ordered["event_id"].astype(str),
+                "label": (
+                    ordered["name"].astype(str)
+                    + " ("
+                    + ordered["alert_level"].astype(str)
+                    + ")"
+                ).map(html.escape),
+                "detail": detail,
+                "fill_color": ordered["alert_level"].map(
+                    lambda level: _rgb(
+                        ALERT_COLORS.get(level, ALERT_COLORS["Unknown"])
+                    )
+                ),
+            }
         )
         layers.append(
             pdk.Layer(
                 "ScatterplotLayer",
+                id="wildfire-reports",
                 data=event_data,
                 get_position="[longitude, latitude]",
                 get_fill_color="fill_color",
@@ -1013,13 +1091,20 @@ def render_live_map(
         )
 
     if hotspots is not None and not hotspots.empty:
-        hotspot_data = hotspots.assign(
-            label="Satellite hotspot",
-            detail=_hotspot_tooltips(hotspots),
-        )
+        hotspot_columns = {
+            "longitude": hotspots["longitude"],
+            "latitude": hotspots["latitude"],
+            "label": "Satellite hotspot",
+            "detail": _hotspot_tooltips(hotspots),
+        }
+        for column in ("acq_date", "acq_time", "satellite", "confidence", "frp"):
+            if column in hotspots.columns:
+                hotspot_columns[column] = hotspots[column]
+        hotspot_data = pd.DataFrame(hotspot_columns)
         layers.append(
             pdk.Layer(
                 "ScatterplotLayer",
+                id="firms-hotspots",
                 data=hotspot_data,
                 get_position="[longitude, latitude]",
                 get_fill_color="[220, 70, 32, 190]",
@@ -1045,11 +1130,34 @@ def render_live_map(
                 "style": {"backgroundColor": "#14171b", "color": "#e9ecef"},
             },
         )
-        st.pydeck_chart(deck, use_container_width=True)
+        if st.session_state.pop("_map_clear_requested", False):
+            st.session_state.pop("wildfire-map", None)
+
+        detail_slot = st.container()
+        event = st.pydeck_chart(
+            deck,
+            use_container_width=True,
+            on_select="rerun",
+            selection_mode="single-object",
+            key="wildfire-map",
+        )
+        _layer_id, clicked = _selected_map_object(event)
+        if clicked is not None:
+            with detail_slot:
+                render_selected_map_object(clicked, events)
+                if st.button(
+                    "Dismiss selected point",
+                    key="map-selection-dismiss",
+                    type="secondary",
+                ):
+                    st.session_state["_map_clear_requested"] = True
+                    st.rerun()
+
         st.caption(
             "Large points: GDACS wildfire reports, coloured by alert level. "
-            "Small points: NASA FIRMS hotspot detections. Detections are not "
-            "fire perimeters."
+            "Small points: NASA FIRMS hotspot detections. Click any point to "
+            "open its report or detection details. Detections are not fire "
+            "perimeters."
         )
     else:
         st.info("No reports or detections to map for this selection.")

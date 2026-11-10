@@ -56,15 +56,16 @@ wildfire events) and each report can surface related English headlines from
 GDELT, with Google News as a fallback when GDELT is unavailable or rate
 limited. The **Live Map** tab plots those GDACS reports worldwide, for
 Indonesia, or for Kalimantan, and overlays NASA FIRMS satellite hotspot
-detections when a FIRMS key is configured. Reports are official GDACS
-events; detections are not verified fire perimeters, evacuation boundaries,
-or model forecasts.
+detections when a FIRMS key is configured. Click any point on the map to open
+its GDACS report (with related news) or its satellite detection details.
+Reports are official GDACS events; detections are not verified fire
+perimeters, evacuation boundaries, or model forecasts.
 
 <img src="docs/screenshots/reports.png" alt="Reports tab listing global GDACS wildfire reports" width="900">
 
 <img src="docs/screenshots/report-news.png" alt="A report expanded with related English news headlines" width="900">
 
-<img src="docs/screenshots/live-map.png" alt="Live Map tab showing GDACS wildfire reports as coloured points" width="900">
+<img src="docs/screenshots/live-map.png" alt="Live Map tab with a clicked report point showing its detail panel above the map" width="900">
 
 Reports and related news need no credentials, and the GDACS map layer works
 without one. Satellite hotspots need a free NASA FIRMS map key (register on
