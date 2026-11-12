@@ -55,28 +55,25 @@ this same project manifest there.
 
 ## Run the web app
 
-The app opens on **Live Globe**, an interactive 3D globe with GDACS wildfire
-reports and, when configured, NASA FIRMS satellite hotspot detections. Drag to
-rotate, scroll to zoom, and click a point for its details. The globe uses a
-static NASA Blue Marble texture as its base imagery; only the report and
-hotspot overlays are live data. The **Reports** tab shows GDACS events, with
-related English headlines from GDELT and Google News. The **Forecast** tab
-contains the current offline forecast outputs. GDACS reports are official
-reports; satellite detections are not verified fire perimeters, evacuation
-boundaries, or forecasts.
+The app opens on **Reports**, showing GDACS wildfire events and related
+headlines. The **Live Map** tab plots reports and optional NASA FIRMS satellite
+hotspots; the **Forecast** tab shows the current offline forecast outputs.
+Reports are official GDACS events; satellite detections are not verified fire
+perimeters, evacuation boundaries, or forecasts.
+
+Reports and related news need no credentials. Satellite hotspots need a free
+NASA FIRMS map key (register on the [FIRMS API map key
+page](https://firms.modaps.eosdis.nasa.gov/api/map_key/)). Without a key, the
+map still shows reports and explains how to add hotspots.
 
 <img src="docs/screenshots/reports.png" alt="Reports tab listing global GDACS wildfire reports" width="900">
 
 <img src="docs/screenshots/report-news.png" alt="A report expanded with related English news headlines" width="900">
 
-Reports and related news need no credentials, and the GDACS globe layer works
-without one. Satellite hotspots need a free NASA FIRMS map key (register on
-the [FIRMS API map key
-page](https://firms.modaps.eosdis.nasa.gov/api/map_key/)). Without a key the
-globe still renders the report layer and explains how to add hotspots.
+<img src="docs/screenshots/live-map.png" alt="Live Map tab with a clicked report point showing its details" width="900">
 
-Set `FIRMS_MAP_KEY` for the current PowerShell session without echoing the
-value, then launch the app:
+To enable satellite hotspots, set `FIRMS_MAP_KEY` for the current PowerShell
+session without echoing the value. Then launch the app:
 
 ```powershell
 $secureKey = Read-Host "FIRMS map key" -AsSecureString
@@ -98,9 +95,8 @@ committed. Do not paste it into source files, screenshots, issue reports, or
 Git. If a key has been shared publicly or in an unintended place, revoke it
 and use a newly generated key. The feed can query up to five recent days and
 supports NASA FIRMS VIIRS/MODIS NRT sources. Attribution: NASA FIRMS.
-
-The report window uses each event's last GDACS report date, and the sidebar
-can hide low-impact Green alerts or include ended reports.
+The report window uses each event's last GDACS report date; the sidebar can
+hide low-impact Green alerts or include ended reports.
 
 ## Run tests
 

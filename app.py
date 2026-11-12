@@ -8,8 +8,8 @@ from datetime import datetime, timezone
 from urllib.parse import urlparse
 
 import pandas as pd
+import pydeck as pdk
 import streamlit as st
-import streamlit.components.v1 as components
 
 from wildfire_evacuation_risk.firms import (
     AREA_BOUNDS,
@@ -18,14 +18,12 @@ from wildfire_evacuation_risk.firms import (
 )
 from wildfire_evacuation_risk.gdacs import fetch_wildfire_events
 from wildfire_evacuation_risk.google_news import search_google_news
-from wildfire_evacuation_risk.globe import build_globe_html
 from wildfire_evacuation_risk.news import build_report_query, search_news
 
 st.set_page_config(
     page_title="WildFireEvac | Global Wildfire Awareness",
     page_icon="🔥",
     layout="wide",
-    initial_sidebar_state="collapsed",
 )
 
 FIRMS_TTL_SECONDS = 15 * 60
@@ -54,20 +52,15 @@ PAGE_SIZE = 10
 UI_CSS = """
 <style>
 :root {
-  --wf-bg: #0a0a0f;
-  --wf-card: #0c0c14;
-  --wf-card-2: #12121c;
-  --wf-border: rgba(255, 255, 255, 0.08);
-  --wf-border-hover: rgba(255, 255, 255, 0.15);
-  --wf-text: #e8eaed;
-  --wf-muted: rgba(232, 234, 237, 0.5);
-  --wf-accent: #00d4ff;
-  --wf-accent-dim: rgba(0, 212, 255, 0.15);
-  --wf-accent-glow: rgba(0, 212, 255, 0.4);
-  --wf-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', ui-monospace, monospace;
-  --wf-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
-  --panel-radius: 16px;
-  --transition: 150ms cubic-bezier(0.4, 0, 0.2, 1);
+  --wf-bg: #08090b;
+  --wf-card: #101216;
+  --wf-card-2: #14171b;
+  --wf-border: #23262c;
+  --wf-text: #e9ecef;
+  --wf-muted: #9aa1a9;
+  --wf-accent: #c9f56b;
+  --wf-accent-2: #b692f6;
+  --wf-mono: ui-monospace, "SFMono-Regular", "Cascadia Mono", Consolas, monospace;
 }
 
 html, body, [data-testid="stAppViewContainer"] {
@@ -304,11 +297,8 @@ hr { border-color: var(--wf-border); }
 [data-testid="stAlert"] {
   border-radius: 16px; border: 1px solid var(--wf-border); background: var(--wf-card);
 }
-[data-testid="stDeckGlJsonChart"], [data-testid="stPydeckChart"],
-[data-testid="stIFrame"] {
-  min-height: 700px;
+[data-testid="stDeckGlJsonChart"], [data-testid="stPydeckChart"] {
   border: 1px solid var(--wf-border); border-radius: 22px; overflow: hidden;
-  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.42), 0 0 55px rgba(0, 212, 255, 0.06);
 }
 [data-testid="stDataFrame"] { border-radius: 14px; overflow: hidden; }
 </style>
@@ -729,13 +719,13 @@ def render_report_bento(
         )
         sat_body = (
             f'<p class="wf-big">{len(hotspots):,}</p>'
-            f'<p class="wf-note">hotspot detections cached from the Live Globe · '
+            f'<p class="wf-note">hotspot detections cached from the Live Map · '
             f"latest observation {html.escape(latest)}</p>"
         )
     elif has_key:
         sat_body = (
             '<p class="wf-big">Ready</p>'
-            '<p class="wf-note">FIRMS key detected. Open the Live Globe to load '
+            '<p class="wf-note">FIRMS key detected. Open the Live Map to load '
             "satellite detections.</p>"
         )
     else:
@@ -874,12 +864,89 @@ def filter_reports(
     return filtered
 
 
-def _map_camera(area_name: str) -> tuple[float, float, float]:
+def _selected_map_object(event) -> tuple[str, dict | None]:
+    """Pull the first clicked deck.gl object out of the widget event state."""
+    if event is None:
+        return "", None
+    selection = getattr(event, "selection", None)
+    if selection is None and isinstance(event, dict):
+        selection = event.get("selection")
+    objects = getattr(selection, "objects", None)
+    if objects is None and isinstance(selection, dict):
+        objects = selection.get("objects")
+    if isinstance(objects, list):
+        for item in objects:
+            if isinstance(item, dict):
+                return "", item
+        return "", None
+    for layer_id, items in (objects or {}).items():
+        for item in items or []:
+            if isinstance(item, dict):
+                return str(layer_id), item
+    return "", None
+
+
+def render_selected_map_object(clicked: dict, events: pd.DataFrame) -> None:
+    event_id = str(clicked.get("event_id") or "")
+    match = (
+        events[events["event_id"].astype(str) == event_id]
+        if event_id
+        else events.head(0)
+    )
+    if not match.empty:
+        row = match.iloc[0]
+        st.markdown(
+            '<div class="wf-section"><h2>Selected report</h2>'
+            "<p>Click another point to switch · use Dismiss to close</p></div>",
+            unsafe_allow_html=True,
+        )
+        label = " · ".join(
+            str(part)
+            for part in (row["name"], row["country"])
+            if pd.notna(part) and str(part).strip()
+        )
+        with st.expander(f"{label} ({row['alert_level']})", expanded=True):
+            render_report_detail(row, key_prefix="map-")
+        return
+
+    st.markdown(
+        '<div class="wf-section"><h2>Selected detection</h2>'
+        "<p>Satellite hotspot · not a verified fire report</p></div>",
+        unsafe_allow_html=True,
+    )
+    parts = []
+    observed = " ".join(
+        str(clicked.get(key))
+        for key in ("acq_date", "acq_time")
+        if clicked.get(key)
+    )
+    if observed:
+        parts.append(f"Observed {observed} UTC")
+    for label_text, key, suffix in (
+        ("Satellite", "satellite", ""),
+        ("Confidence", "confidence", ""),
+        ("FRP", "frp", " MW"),
+    ):
+        if clicked.get(key) not in (None, ""):
+            parts.append(f"{label_text} {clicked[key]}{suffix}")
+    st.info(" · ".join(parts) or "Detection details are unavailable.")
+
+
+def _map_view_state(area_name: str) -> pdk.ViewState:
     if area_name == "Global":
-        return 12, 14, 2.4
+        longitude, latitude, zoom = 110, 5, 1
     elif area_name == "Indonesia":
-        return 118, -2, 1.45
-    return 114, -1, 0.85
+        longitude, latitude, zoom = 118, -2, 4
+    else:
+        longitude, latitude, zoom = 114, -1, 5
+    return pdk.ViewState(
+        longitude=longitude,
+        latitude=latitude,
+        zoom=zoom,
+        min_zoom=0,
+        max_zoom=16,
+        pitch=0,
+    )
 
 
 def _hotspot_tooltips(hotspots: pd.DataFrame) -> pd.Series:
@@ -974,7 +1041,7 @@ def render_live_map(
     if has_key and hotspots is None and snapshot is not None and snapshot.error:
         st.caption("Showing GDACS reports only while the satellite feed is down.")
 
-    report_features = []
+    layers = []
     if not mapped.empty:
         ordered = mapped.assign(_rank=mapped["alert_level"].map(ALERT_RANK))
         ordered = ordered.sort_values("_rank", ascending=False, kind="stable")
@@ -989,8 +1056,9 @@ def render_live_map(
             detail.append(html.escape(" · ".join(parts)))
         event_data = pd.DataFrame(
             {
-                "longitude": pd.to_numeric(ordered["longitude"], errors="coerce"),
-                "latitude": pd.to_numeric(ordered["latitude"], errors="coerce"),
+                "longitude": ordered["longitude"],
+                "latitude": ordered["latitude"],
+                "event_id": ordered["event_id"].astype(str),
                 "label": (
                     ordered["name"].astype(str)
                     + " ("
@@ -1005,23 +1073,27 @@ def render_live_map(
                 ),
             }
         )
-        event_data = event_data.dropna(subset=["longitude", "latitude"])
-        report_features = [
-            {
-                "longitude": float(row.longitude),
-                "latitude": float(row.latitude),
-                "label": str(row.label),
-                "detail": str(row.detail),
-                "color": [int(channel) for channel in row.fill_color],
-            }
-            for row in event_data.itertuples(index=False)
-        ]
+        layers.append(
+            pdk.Layer(
+                "ScatterplotLayer",
+                id="wildfire-reports",
+                data=event_data,
+                get_position="[longitude, latitude]",
+                get_fill_color="fill_color",
+                get_line_color="[255, 255, 255, 220]",
+                get_radius=35000,
+                radius_min_pixels=5,
+                radius_max_pixels=18,
+                line_width_min_pixels=1,
+                stroked=True,
+                pickable=True,
+            )
+        )
 
-    hotspot_features = []
     if hotspots is not None and not hotspots.empty:
         hotspot_columns = {
-            "longitude": pd.to_numeric(hotspots["longitude"], errors="coerce"),
-            "latitude": pd.to_numeric(hotspots["latitude"], errors="coerce"),
+            "longitude": hotspots["longitude"],
+            "latitude": hotspots["latitude"],
             "label": "Satellite hotspot",
             "detail": _hotspot_tooltips(hotspots),
         }
@@ -1029,38 +1101,66 @@ def render_live_map(
             if column in hotspots.columns:
                 hotspot_columns[column] = hotspots[column]
         hotspot_data = pd.DataFrame(hotspot_columns)
-        hotspot_data = hotspot_data.dropna(subset=["longitude", "latitude"])
-        hotspot_features = [
-            {
-                "longitude": float(row.longitude),
-                "latitude": float(row.latitude),
-                "label": str(row.label),
-                "detail": str(row.detail),
-            }
-            for row in hotspot_data.itertuples(index=False)
-        ]
+        layers.append(
+            pdk.Layer(
+                "ScatterplotLayer",
+                id="firms-hotspots",
+                data=hotspot_data,
+                get_position="[longitude, latitude]",
+                get_fill_color="[220, 70, 32, 190]",
+                get_line_color="[90, 35, 20, 220]",
+                get_radius=2500,
+                radius_min_pixels=2,
+                radius_max_pixels=12,
+                line_width_min_pixels=1,
+                stroked=True,
+                pickable=True,
+            )
+        )
 
-    longitude, latitude, camera_height = _map_camera(area_name)
-    components.html(
-        build_globe_html(
-            reports=report_features,
-            hotspots=hotspot_features,
-            longitude=longitude,
-            latitude=latitude,
-            camera_altitude=camera_height,
-        ),
-        height=760,
-        scrolling=False,
-    )
+    if layers:
+        deck = pdk.Deck(
+            layers=layers,
+            initial_view_state=_map_view_state(area_name),
+            map_style=(
+                "https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json"
+            ),
+            tooltip={
+                "html": "<b>{label}</b><br/>{detail}",
+                "style": {"backgroundColor": "#14171b", "color": "#e9ecef"},
+            },
+        )
+        if st.session_state.pop("_map_clear_requested", False):
+            st.session_state.pop("wildfire-map", None)
 
-    st.caption(
-        "Interactive satellite globe · drag to rotate · scroll to zoom. "
-        "Large points are GDACS wildfire reports; small points are NASA FIRMS "
-        "satellite detections. Click a point for details. Static base imagery "
-        "is NASA Blue Marble; hotspots are not verified fire perimeters."
-    )
-    if not report_features and not hotspot_features:
-        st.info("No reports or satellite detections are available; the globe remains visible.")
+        detail_slot = st.container()
+        event = st.pydeck_chart(
+            deck,
+            use_container_width=True,
+            on_select="rerun",
+            selection_mode="single-object",
+            key="wildfire-map",
+        )
+        _layer_id, clicked = _selected_map_object(event)
+        if clicked is not None:
+            with detail_slot:
+                render_selected_map_object(clicked, events)
+                if st.button(
+                    "Dismiss selected point",
+                    key="map-selection-dismiss",
+                    type="secondary",
+                ):
+                    st.session_state["_map_clear_requested"] = True
+                    st.rerun()
+
+        st.caption(
+            "Large points: GDACS wildfire reports, coloured by alert level. "
+            "Small points: NASA FIRMS hotspot detections. Click any point to "
+            "open its report or detection details. Detections are not fire "
+            "perimeters."
+        )
+    else:
+        st.info("No reports or detections to map for this selection.")
 
     if hotspots is not None and not hotspots.empty:
         display_columns = [
@@ -1120,7 +1220,7 @@ def main() -> None:
         '<div class="wf-topbar">'
         "<div>"
         '<p class="wf-brand">🔥 WildFireEvac</p>'
-        '<p class="wf-tagline">Live global wildfire awareness: GDACS reports, '
+        '<p class="wf-tagline">Report-first wildfire awareness: GDACS events, '
         "related English news, and satellite detections. Not an emergency "
         "decision tool.</p>"
         "</div>"
@@ -1177,14 +1277,14 @@ def main() -> None:
         source = st.selectbox("Satellite feed", SUPPORTED_SOURCES, index=2)
         day_range = st.slider("Look-back (days)", min_value=1, max_value=5, value=1)
         st.caption(
-            "The Live Globe plots GDACS reports without a key; NASA FIRMS "
+            "The Live Map plots GDACS reports without a key; NASA FIRMS "
             "hotspot detections need a free FIRMS map key."
         )
 
     refresh_interval = REFRESH_OPTIONS[interval_label] if auto_refresh else None
 
-    map_tab, reports_tab, forecast_tab = st.tabs(
-        ["Live Globe", "Reports", "Forecast"]
+    reports_tab, map_tab, forecast_tab = st.tabs(
+        ["Reports", "Live Map", "Forecast"]
     )
 
     with reports_tab:
