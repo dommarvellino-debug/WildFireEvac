@@ -53,6 +53,7 @@
     mix-blend-mode: screen;
   }
   .marker {
+    position: absolute; left: 0; top: 0;
     display: flex; align-items: center; gap: 4px;
     transform: translate(-4px, -50%); cursor: pointer; pointer-events: auto;
   }
@@ -182,7 +183,7 @@
   controls.autoRotate = true;
   controls.autoRotateSpeed = 0.26;
   controls.enablePan = false;
-  controls.minDistance = 175;
+  controls.minDistance = 115;
   controls.maxDistance = 640;
   globe.pointOfView({ lat: 12, lng: 18, altitude: 1.5 }, 0);
 
@@ -217,7 +218,7 @@
         select(r.id);
       });
       overlay.appendChild(node);
-      return { node: node, id: r.id, lat: r.lat, lng: r.lng };
+      return { node: node, dot: dot, id: r.id, lat: r.lat, lng: r.lng };
     });
   }
 
@@ -231,8 +232,8 @@
     overlayItems.forEach((item) => {
       const altitude = item.id === selectedId ? 0.05 : 0.016;
       const phi = ((90 - item.lat) * Math.PI) / 180;
-      const theta = ((item.lng + 180) * Math.PI) / 180;
-      const x = -Math.sin(phi) * Math.cos(theta);
+      const theta = ((90 - item.lng) * Math.PI) / 180;
+      const x = Math.sin(phi) * Math.cos(theta);
       const y = Math.cos(phi);
       const z = Math.sin(phi) * Math.sin(theta);
       const facing = x * dir.x + y * dir.y + z * dir.z;
@@ -250,8 +251,10 @@
         return;
       }
       item.node.style.display = "";
+      const dotOffset = -item.dot.getBoundingClientRect().width / 2;
       item.node.style.transform =
-        "translate(" + coords.x.toFixed(1) + "px," + coords.y.toFixed(1) + "px) translate(-4px,-50%)";
+        "translate(" + coords.x + "px," + coords.y + "px) translate(" +
+        dotOffset + "px,-50%)";
     });
   }
 
