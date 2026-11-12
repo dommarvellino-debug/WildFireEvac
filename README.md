@@ -55,22 +55,20 @@ this same project manifest there.
 
 ## Run the web app
 
-The app opens on **Reports**, showing GDACS wildfire events and related
-headlines. The **Live Map** tab plots reports and optional NASA FIRMS satellite
-hotspots; the **Forecast** tab shows the current offline forecast outputs.
-Reports are official GDACS events; satellite detections are not verified fire
-perimeters, evacuation boundaries, or forecasts.
+The app opens on a single-screen **GOD'S EYE VIEW** console: a rotatable 3D
+globe plots every GDACS wildfire report worldwide, with optional NASA FIRMS
+satellite hotspots. Clicking a marker locks that report and shows its details,
+description, official links, and on-demand related headlines; the left panel
+filters alert levels and the look-back window. Reports are official GDACS
+events; satellite detections are not verified fire perimeters, evacuation
+boundaries, or forecasts.
 
 Reports and related news need no credentials. Satellite hotspots need a free
 NASA FIRMS map key (register on the [FIRMS API map key
 page](https://firms.modaps.eosdis.nasa.gov/api/map_key/)). Without a key, the
 map still shows reports and explains how to add hotspots.
 
-<img src="docs/screenshots/reports.png" alt="Reports tab listing global GDACS wildfire reports" width="900">
-
-<img src="docs/screenshots/report-news.png" alt="A report expanded with related English news headlines" width="900">
-
-<img src="docs/screenshots/live-map.png" alt="Live Map tab with a clicked report point showing its details" width="900">
+<img src="docs/screenshots/hud.png" alt="GOD'S EYE VIEW console with the global wildfire globe and a locked report" width="900">
 
 To enable satellite hotspots, set `FIRMS_MAP_KEY` for the current PowerShell
 session without echoing the value. Then launch the app:

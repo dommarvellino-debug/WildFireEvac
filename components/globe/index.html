@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<title>Wildfire globe</title>
+<style>
+  html, body {
+    margin: 0;
+    padding: 0;
+    height: 100%;
+    background: #04070b;
+    overflow: hidden;
+    font-family: ui-monospace, "Cascadia Mono", "SFMono-Regular", Consolas, monospace;
+  }
+  #globe { position: absolute; inset: 0; cursor: grab; }
+  #globe:active { cursor: grabbing; }
+  .tip {
+    font-family: ui-monospace, "Cascadia Mono", Consolas, monospace;
+    background: rgba(4, 12, 18, 0.92);
+    border: 1px solid rgba(79, 243, 255, 0.35);
+    color: #dff9ff;
+    padding: 7px 9px;
+    font-size: 11px;
+    line-height: 1.45;
+    letter-spacing: 0.03em;
+    max-width: 260px;
+  }
+  .tip b { color: #4ff3ff; font-weight: 600; letter-spacing: 0.06em; }
+  .tip span { color: #7fa6b4; }
+  #markers {
+    position: absolute; inset: 0;
+    pointer-events: none; overflow: hidden;
+  }
+  #hint, #empty, #scan {
+    position: absolute;
+    pointer-events: none;
+    color: rgba(111, 158, 176, 0.85);
+    font-size: 9.5px;
+    letter-spacing: 0.22em;
+    text-transform: uppercase;
+  }
+  #hint { left: 50%; transform: translateX(-50%); bottom: 12px; white-space: nowrap; }
+  #empty {
+    left: 50%; top: 50%; transform: translate(-50%, -50%);
+    font-size: 11px; letter-spacing: 0.3em; color: rgba(255, 159, 28, 0.85);
+    display: none;
+  }
+  #scan {
+    inset: 0;
+    background: repeating-linear-gradient(
+      0deg, rgba(79, 243, 255, 0.045) 0 1px, transparent 1px 3px
+    );
+    mix-blend-mode: screen;
+  }
+  .marker {
+    display: flex; align-items: center; gap: 4px;
+    transform: translate(-4px, -50%); cursor: pointer; pointer-events: auto;
+  }
+  .marker .dot {
+    width: 7px; height: 7px; border-radius: 50%; background: #3ddc84;
+    box-shadow: 0 0 8px #3ddc84; border: 1px solid rgba(4, 7, 11, 0.85);
+    flex: none;
+  }
+  .marker.Red .dot { background: #ff3b3b; box-shadow: 0 0 10px #ff3b3b; width: 10px; height: 10px; }
+  .marker.Orange .dot { background: #ff9f1c; box-shadow: 0 0 9px #ff9f1c; width: 8px; height: 8px; }
+  .marker.sel .dot { width: 14px; height: 14px; background: #4ff3ff; box-shadow: 0 0 16px #4ff3ff; }
+  .marker .tag {
+    display: inline-block; padding: 0 4px;
+    font-size: 9px; letter-spacing: 0.1em; line-height: 1.6;
+    color: #dff9ff; background: rgba(4, 12, 18, 0.82);
+    border: 1px solid rgba(79, 243, 255, 0.3); border-left: 2px solid #3ddc84;
+    white-space: nowrap;
+  }
+  .marker.Red .tag { border-left-color: #ff3b3b; color: #ffd9d9; }
+  .marker.Orange .tag { border-left-color: #ff9f1c; color: #ffe8c6; }
+  .marker.sel .tag {
+    background: rgba(79, 243, 255, 0.2); box-shadow: 0 0 12px rgba(79, 243, 255, 0.5);
+  }
+</style>
+</head>
+<body>
+<div id="globe"></div>
+<div id="markers"></div>
+<div id="scan"></div>
+<div id="empty">NO ACTIVE SIGNALS</div>
+<div id="hint">Drag to orbit &nbsp;·&nbsp; scroll to zoom &nbsp;·&nbsp; click a marker</div>
+
+<script src="https://unpkg.com/three"></script>
+<script src="https://unpkg.com/globe.gl"></script>
+<script>
+(function () {
+  "use strict";
+
+  const ALERT_HEX = {
+    Red: "#ff3b3b",
+    Orange: "#ff9f1c",
+    Green: "#3ddc84",
+    Unknown: "#8fa3ad",
+  };
+  const ALERT_RING = {
+    Red: [255, 59, 59, 170],
+    Orange: [255, 159, 28, 150],
+    Green: [61, 220, 132, 120],
+    Unknown: [143, 163, 173, 120],
+  };
+  const RANK = { Red: 0, Orange: 1, Green: 2, Unknown: 3 };
+
+  const frame = (type, payload) =>
+    window.parent.postMessage(
+      Object.assign({ isStreamlitMessage: true, type: type }, payload || {}),
+      "*"
+    );
+
+  const setValue = (value) =>
+    frame("streamlit:setComponentValue", { value: value, dataType: "json" });
+
+  let selectedId = null;
+  let reports = [];
+  let hotspots = [];
+  let showHotspots = true;
+  let ready = false;
+  let lastSignature = "";
+  let hotspotCount = 0;
+  let overlayItems = [];
+
+  const host = document.getElementById("globe");
+  const overlay = document.getElementById("markers");
+  const emptyNote = document.getElementById("empty");
+
+  const globe = Globe()(host)
+    .globeImageUrl("https://unpkg.com/three-globe/example/img/earth-night.jpg")
+    .backgroundColor("#04070b")
+    .showAtmosphere(true)
+    .atmosphereColor("#4ff3ff")
+    .atmosphereAltitude(0.16)
+    .pointLat("lat")
+    .pointLng("lng")
+    .pointColor("color")
+    .pointAltitude("alt")
+    .pointRadius("radius")
+    .pointResolution(10)
+    .pointLabel((d) => d.tip || "")
+    .onPointClick((d) => {
+      if (d.kind === "hotspot") {
+        setValue({
+          kind: "hotspot",
+          lat: d.lat,
+          lng: d.lng,
+          date: d.date || "",
+          time: d.time || "",
+          satellite: d.satellite || "",
+          confidence: d.confidence || "",
+          frp: d.frp === null || d.frp === undefined ? "" : String(d.frp),
+          ts: Date.now(),
+        });
+        return;
+      }
+      select(d.id);
+    })
+    .onGlobeClick(() => select(null))
+    .ringsData([])
+    .ringLat("lat")
+    .ringLng("lng")
+    .ringColor("color")
+    .ringMaxRadius(3.4)
+    .ringPropagationSpeed(1.5)
+    .ringRepeatPeriod(1700)
+
+
+  function select(id) {
+    if (id === selectedId) {
+      selectedId = null;
+      setValue({ kind: "clear", ts: Date.now() });
+    } else {
+      selectedId = id;
+      setValue({ kind: "report", id: id, ts: Date.now() });
+    }
+    refresh();
+  }
+
+  const controls = globe.controls();
+  controls.autoRotate = true;
+  controls.autoRotateSpeed = 0.26;
+  controls.enablePan = false;
+  controls.minDistance = 175;
+  controls.maxDistance = 640;
+  globe.pointOfView({ lat: 12, lng: 18, altitude: 1.5 }, 0);
+
+  let idleTimer = null;
+  host.addEventListener("pointerdown", () => {
+    controls.autoRotate = false;
+    if (idleTimer) clearTimeout(idleTimer);
+  });
+  host.addEventListener("pointerup", () => {
+    if (idleTimer) clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => { controls.autoRotate = true; }, 12000);
+  });
+
+  function buildOverlay(tagged) {
+    overlay.innerHTML = "";
+    overlayItems = reports.map((r) => {
+      const node = document.createElement("div");
+      node.className = "marker " + r.level + (r.id === selectedId ? " sel" : "");
+      node.dataset.id = r.id;
+      node.title = r.title || "";
+      const dot = document.createElement("i");
+      dot.className = "dot";
+      node.appendChild(dot);
+      if (tagged.has(r.id) && r.tag) {
+        const tag = document.createElement("span");
+        tag.className = "tag";
+        tag.textContent = r.tag;
+        node.appendChild(tag);
+      }
+      node.addEventListener("click", (event) => {
+        event.stopPropagation();
+        select(r.id);
+      });
+      overlay.appendChild(node);
+      return { node: node, id: r.id, lat: r.lat, lng: r.lng };
+    });
+  }
+
+  function updateOverlay() {
+    if (!overlayItems.length) return;
+    const cam = globe.camera();
+    if (!cam) return;
+    const dir = cam.position.clone().normalize();
+    const width = host.clientWidth;
+    const height = host.clientHeight;
+    overlayItems.forEach((item) => {
+      const altitude = item.id === selectedId ? 0.05 : 0.016;
+      const phi = ((90 - item.lat) * Math.PI) / 180;
+      const theta = ((item.lng + 180) * Math.PI) / 180;
+      const x = -Math.sin(phi) * Math.cos(theta);
+      const y = Math.cos(phi);
+      const z = Math.sin(phi) * Math.sin(theta);
+      const facing = x * dir.x + y * dir.y + z * dir.z;
+      if (facing < 0.02) {
+        item.node.style.display = "none";
+        return;
+      }
+      const coords = globe.getScreenCoords(item.lat, item.lng, altitude);
+      if (!coords || !isFinite(coords.x) || !isFinite(coords.y)) {
+        item.node.style.display = "none";
+        return;
+      }
+      if (coords.x < -30 || coords.y < -30 || coords.x > width + 30 || coords.y > height + 30) {
+        item.node.style.display = "none";
+        return;
+      }
+      item.node.style.display = "";
+      item.node.style.transform =
+        "translate(" + coords.x.toFixed(1) + "px," + coords.y.toFixed(1) + "px) translate(-4px,-50%)";
+    });
+  }
+
+  function animate() {
+    updateOverlay();
+    requestAnimationFrame(animate);
+  }
+
+  function refresh() {
+    const points = reports.map((r) => ({
+      id: r.id,
+      kind: "report",
+      lat: r.lat,
+      lng: r.lng,
+      color: ALERT_HEX[r.level] || ALERT_HEX.Unknown,
+      radius: r.id === selectedId ? r.radius * 2.1 : r.radius,
+      alt: r.id === selectedId ? 0.05 : 0.016,
+      tip: r.tip,
+    }));
+
+    hotspotCount = showHotspots ? hotspots.length : 0;
+    if (showHotspots) {
+      hotspots.forEach((h) => {
+        points.push({
+          kind: "hotspot",
+          lat: h.lat,
+          lng: h.lng,
+          color: "#ff7828",
+          radius: 0.42,
+          alt: 0.008,
+          tip: h.tip,
+          date: h.date,
+          time: h.time,
+          satellite: h.satellite,
+          confidence: h.confidence,
+          frp: h.frp,
+        });
+      });
+    }
+
+    globe.pointsData(points);
+
+    const pulse = reports.filter((r) => r.level === "Red" || r.id === selectedId);
+    globe.ringsData(
+      pulse.map((r) => ({
+        lat: r.lat,
+        lng: r.lng,
+        color: ALERT_RING[r.level] || ALERT_RING.Unknown,
+      }))
+    );
+
+    const usedTags = new Set();
+    const tagged = new Set();
+    reports
+      .filter((r) => r.tag)
+      .slice()
+      .sort((a, b) => (RANK[a.level] ?? 9) - (RANK[b.level] ?? 9))
+      .forEach((r) => {
+        if (tagged.size >= 14 || usedTags.has(r.tag)) return;
+        usedTags.add(r.tag);
+        tagged.add(r.id);
+      });
+    const signature =
+      reports.map((r) => r.id).join("|") +
+      "#" +
+      Array.from(tagged).join(",") +
+      "#" +
+      hotspotCount;
+    if (signature !== lastSignature) {
+      lastSignature = signature;
+      buildOverlay(tagged);
+    }
+    overlayItems.forEach((item) => {
+      item.node.classList.toggle("sel", item.node.dataset.id === selectedId);
+    });
+    updateOverlay();
+
+    emptyNote.style.display = reports.length ? "none" : "block";
+  }
+
+  function applyArgs(args) {
+    args = args || {};
+    showHotspots = args.show_hotspots !== false;
+    hotspots = (args.hotspots || []).map((h) => ({
+      lat: h.lat,
+      lng: h.lng,
+      date: h.date,
+      time: h.time,
+      satellite: h.satellite,
+      confidence: h.confidence,
+      frp: h.frp,
+      tip: h.tip,
+    }));
+    reports = (args.reports || []).map((r) => ({
+      id: r.id,
+      lat: r.lat,
+      lng: r.lng,
+      level: r.level,
+      tag: r.tag || "",
+      tip: r.tip || "",
+      radius: r.level === "Red" ? 0.55 : r.level === "Orange" ? 0.46 : 0.36,
+    }));
+    selectedId = args.selected || null;
+    if (selectedId && !reports.some((r) => r.id === selectedId)) selectedId = null;
+    refresh();
+  }
+
+  function handleMessage(event) {
+    const data = event.data;
+    if (!data || typeof data !== "object" || data.type !== "streamlit:render") return;
+    applyArgs(data.args || {});
+  }
+
+  window.addEventListener("message", handleMessage);
+  window.addEventListener("streamlit:render", (event) => {
+    applyArgs((event.detail && event.detail.args) || {});
+  });
+
+  new ResizeObserver(() => {
+    globe.width(host.clientWidth).height(host.clientHeight);
+  }).observe(host);
+
+  globe.width(host.clientWidth).height(host.clientHeight);
+  animate();
+  frame("streamlit:componentReady", { apiVersion: 1 });
+  ready = true;
+  frame("streamlit:setFrameHeight", { height: Math.max(420, window.innerHeight) });
+})();
+</script>
+</body>
+</html>
