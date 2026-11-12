@@ -4,11 +4,24 @@
 > forecasts, and documentation may change; do not rely on it for emergency
 > decisions.
 
-The project will estimate whether a wildfire threatens an evacuation zone using
-only information available during the fire's first five hours. The target
-forecast horizons are 12, 24, 48, and 72 hours after that observation window.
+## Project definition
 
-The initial stack is:
+WildFireEvac combines a global wildfire situational-awareness dashboard with an
+offline research pipeline for estimating whether a wildfire may threaten an
+evacuation zone. The dashboard plots official GDACS wildfire reports and
+optional NASA FIRMS near-real-time satellite thermal detections on an
+interactive globe. Users can filter reports, inspect event details, and open
+related headlines.
+
+The research pipeline is designed to estimate threat at 12, 24, 48, and 72
+hours using information from a fire's first five hours. Those model forecasts
+are not currently connected to the live dashboard. FIRMS detections are
+satellite observations, not verified fire perimeters, evacuation boundaries,
+or forecasts; this project is not an emergency-decision tool.
+
+## Modeling approach
+
+The initial modeling stack is:
 
 - Python for the data and modeling pipeline
 - pandas for tabular data preparation
@@ -68,7 +81,7 @@ NASA FIRMS map key (register on the [FIRMS API map key
 page](https://firms.modaps.eosdis.nasa.gov/api/map_key/)). Without a key, the
 map still shows reports and explains how to add hotspots.
 
-<img src="docs/screenshots/hud.png" alt="GOD'S EYE VIEW console with the global wildfire globe and a locked report" width="900">
+<img src="docs/screenshots/hud.png" alt="Current Aetheris Pyro-Watch dashboard showing GDACS wildfire reports on the interactive globe; FIRMS is locked until a map key is configured" width="1200">
 
 To enable satellite hotspots, set `FIRMS_MAP_KEY` for the current PowerShell
 session without echoing the value. Then launch the app:
